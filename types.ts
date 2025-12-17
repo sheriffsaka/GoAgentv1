@@ -14,6 +14,8 @@ export interface User {
   agreementSigned: boolean;
   agreementTimestamp?: string;
   agreementIp?: string;
+  createdAt?: string;
+  lastActive?: string;
 }
 
 export type SubmissionStatus = 'PENDING' | 'APPROVED' | 'PAID';

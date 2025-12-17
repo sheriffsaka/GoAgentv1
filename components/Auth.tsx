@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { User } from '../types';
 import { MockService } from '../services/mockService';
-import { Loader2, ShieldCheck } from 'lucide-react';
+import { Loader2, ShieldCheck, Info } from 'lucide-react';
 
 interface AuthProps {
   onLogin: (user: User) => void;
@@ -36,10 +36,15 @@ export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
       }
       onLogin(user);
     } catch (error) {
-      alert("Login failed. For demo, use 'admin@estatego.app' for Admin, or register a new agent.");
+      alert("Account not found. For testing, use the email shown in the 'Demo Credentials' section below.");
     } finally {
       setLoading(false);
     }
+  };
+
+  const setDemoAdmin = () => {
+    setEmail('admin@estatego.app');
+    setIsRegistering(false);
   };
 
   return (
@@ -57,7 +62,7 @@ export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
           {isRegistering ? 'Already have an account? ' : 'New Agent? '}
           <button
             onClick={() => setIsRegistering(!isRegistering)}
-            className="font-medium text-cyan-600 hover:text-cyan-500"
+            className="font-medium text-cyan-600 hover:text-cyan-500 underline decoration-dotted"
           >
             {isRegistering ? 'Sign in' : 'Register now'}
           </button>
@@ -146,12 +151,36 @@ export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-navy-900 bg-cyan-400 hover:bg-cyan-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-cyan-500 disabled:opacity-50"
+                className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-navy-900 bg-cyan-400 hover:bg-cyan-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-cyan-500 disabled:opacity-50 transition-colors"
               >
                 {loading ? <Loader2 className="animate-spin h-5 w-5" /> : (isRegistering ? 'Register Account' : 'Sign In')}
               </button>
             </div>
           </form>
+
+          {!isRegistering && (
+            <div className="mt-6">
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-gray-300"></div>
+                </div>
+                <div className="relative flex justify-center text-sm">
+                  <span className="px-2 bg-white text-gray-500 uppercase font-bold text-[10px] tracking-widest">Demo Credentials</span>
+                </div>
+              </div>
+
+              <div className="mt-4 p-3 bg-navy-900/5 rounded-lg border border-navy-900/10 flex flex-col items-center">
+                <button 
+                  onClick={setDemoAdmin}
+                  className="flex items-center gap-2 text-navy-900 text-xs font-bold hover:text-navy-700 transition-colors"
+                >
+                  <Info size={14} className="text-cyan-600" />
+                  Use Admin Demo Account
+                </button>
+                <p className="text-[10px] text-gray-500 mt-1 italic">Email: admin@estatego.app</p>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
