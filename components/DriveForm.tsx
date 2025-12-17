@@ -1,6 +1,7 @@
+
 import React, { useState } from 'react';
 import { User, DriveSubmission } from '../types';
-import { ChevronLeft, ChevronRight, CheckCircle2, Building2, MapPin, PhoneCall, Sparkles } from 'lucide-react';
+import { ChevronLeft, ChevronRight, CheckCircle2, Building2, MapPin, PhoneCall, Sparkles, Camera, Locate, Loader2 } from 'lucide-react';
 
 const NIGERIAN_STATES = [
   "Abia", "Adamawa", "Akwa Ibom", "Anambra", "Bauchi", "Bayelsa", "Benue", "Borno", 
@@ -27,6 +28,7 @@ export const DriveForm: React.FC<DriveFormProps> = ({ user, onSubmit }) => {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [locating, setLocating] = useState(false);
 
   const [formData, setFormData] = useState({
     agentName: user.fullName,
@@ -46,12 +48,48 @@ export const DriveForm: React.FC<DriveFormProps> = ({ user, onSubmit }) => {
     featuresInterested: [] as string[],
     subscriptionType: 'Residential',
     marketingChannels: [] as string[],
-    feedback: ''
+    feedback: '',
+    coordinates: undefined as { lat: number; lng: number } | undefined,
+    propertyPhoto: undefined as string | undefined
   });
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleCaptureLocation = () => {
+    setLocating(true);
+    if (!navigator.geolocation) {
+      alert("Geolocation is not supported by your browser");
+      setLocating(false);
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setFormData(prev => ({ 
+          ...prev, 
+          coordinates: { lat: pos.coords.latitude, lng: pos.coords.longitude } 
+        }));
+        setLocating(false);
+      },
+      () => {
+        alert("Unable to retrieve location. Please enable location permissions.");
+        setLocating(false);
+      }
+    );
+  };
+
+  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setFormData(prev => ({ ...prev, propertyPhoto: reader.result as string }));
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
   const handleCheckbox = (list: 'featuresInterested' | 'marketingChannels', item: string) => {
@@ -66,6 +104,10 @@ export const DriveForm: React.FC<DriveFormProps> = ({ user, onSubmit }) => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!formData.coordinates && step === 4) {
+      alert("Please capture your location to prove the field visit.");
+      return;
+    }
     setLoading(true);
     try {
       await onSubmit({
@@ -91,11 +133,10 @@ export const DriveForm: React.FC<DriveFormProps> = ({ user, onSubmit }) => {
         </div>
         <h2 className="text-3xl font-bold text-navy-900 mb-4">Drive Reported!</h2>
         <p className="text-gray-500 mb-10 text-lg leading-relaxed">
-          The property lead has been logged. Our admin team will verify the details within 24-48 hours. 
-          Pending commission has been added to your dashboard.
+          The property lead has been logged with proof of visit. Our AI and admin team will verify the details shortly.
         </p>
         <button 
-          onClick={() => { setSuccess(false); setStep(1); setFormData({...formData, propertyName: '', propertyAddress: ''}) }}
+          onClick={() => { setSuccess(false); setStep(1); setFormData({...formData, propertyName: '', propertyAddress: '', propertyPhoto: undefined, coordinates: undefined}) }}
           className="bg-navy-900 text-white px-8 py-3 rounded-xl font-bold hover:bg-navy-800 transition-all shadow-lg"
         >
           Submit Another Report
@@ -126,16 +167,38 @@ export const DriveForm: React.FC<DriveFormProps> = ({ user, onSubmit }) => {
               <MapPin size={24} />
               <h3 className="font-bold text-lg">Agent & Property Location</h3>
             </div>
+            
+            <div className="flex flex-col md:flex-row gap-4 mb-6">
+              <button 
+                type="button" 
+                onClick={handleCaptureLocation}
+                disabled={locating}
+                className={`flex-1 flex items-center justify-center gap-3 p-4 rounded-xl border-2 transition-all font-bold ${formData.coordinates ? 'bg-emerald-50 border-emerald-500 text-emerald-700' : 'bg-gray-50 border-gray-200 text-gray-700 hover:border-cyan-400'}`}
+              >
+                {locating ? <Loader2 className="animate-spin" /> : <Locate size={20} />}
+                {formData.coordinates ? 'Location Captured ✓' : 'Capture Current Location'}
+              </button>
+              
+              <label className={`flex-1 flex items-center justify-center gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all font-bold ${formData.propertyPhoto ? 'bg-emerald-50 border-emerald-500 text-emerald-700' : 'bg-gray-50 border-gray-200 text-gray-700 hover:border-cyan-400'}`}>
+                <Camera size={20} />
+                {formData.propertyPhoto ? 'Photo Uploaded ✓' : 'Upload Property Photo'}
+                <input type="file" accept="image/*" onChange={handlePhotoUpload} className="hidden" />
+              </label>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Agent Name</label>
-                <input disabled value={formData.agentName} className="w-full p-3 bg-gray-50 rounded-xl border border-gray-200 text-gray-500" />
-              </div>
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">Agent Status</label>
                 <select name="agentStatus" value={formData.agentStatus} onChange={handleChange} className="w-full p-3 bg-white rounded-xl border border-gray-200 focus:ring-2 focus:ring-cyan-400 outline-none">
                   <option value="Freelance">Freelance</option>
                   <option value="In-house">In-house</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">State / Location</label>
+                <select required name="stateLocation" value={formData.stateLocation} onChange={handleChange} className="w-full p-3 bg-white rounded-xl border border-gray-200 focus:ring-2 focus:ring-cyan-400 outline-none">
+                  <option value="">Select State</option>
+                  {NIGERIAN_STATES.map(state => <option key={state} value={state}>{state}</option>)}
                 </select>
               </div>
               <div className="md:col-span-2">
@@ -145,13 +208,6 @@ export const DriveForm: React.FC<DriveFormProps> = ({ user, onSubmit }) => {
               <div className="md:col-span-2">
                 <label className="block text-sm font-semibold text-gray-700 mb-2">Property Address</label>
                 <input required name="propertyAddress" value={formData.propertyAddress} onChange={handleChange} className="w-full p-3 bg-white rounded-xl border border-gray-200 focus:ring-2 focus:ring-cyan-400 outline-none" placeholder="Enter full address" />
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">State / Location</label>
-                <select required name="stateLocation" value={formData.stateLocation} onChange={handleChange} className="w-full p-3 bg-white rounded-xl border border-gray-200 focus:ring-2 focus:ring-cyan-400 outline-none">
-                  <option value="">Select State</option>
-                  {NIGERIAN_STATES.map(state => <option key={state} value={state}>{state}</option>)}
-                </select>
               </div>
             </div>
           </div>
@@ -248,13 +304,6 @@ export const DriveForm: React.FC<DriveFormProps> = ({ user, onSubmit }) => {
                   <option value="Low">Low Interest</option>
                 </select>
               </div>
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Subscription Type</label>
-                <select name="subscriptionType" value={formData.subscriptionType} onChange={handleChange} className="w-full p-3 bg-white rounded-xl border border-gray-200 focus:ring-2 focus:ring-cyan-400 outline-none">
-                  <option value="Residential">Residential Plan (₦1,500/mo)</option>
-                  <option value="Commercial">Commercial Plan</option>
-                </select>
-              </div>
               <div className="md:col-span-2">
                 <label className="block text-sm font-semibold text-gray-700 mb-2">Features Interested In</label>
                 <div className="flex flex-wrap gap-2">
@@ -266,29 +315,6 @@ export const DriveForm: React.FC<DriveFormProps> = ({ user, onSubmit }) => {
                     >
                       {f}
                     </button>
-                  ))}
-                </div>
-              </div>
-              <div className="md:col-span-2">
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Marketing Channel (Discovery)</label>
-                <select 
-                  className="w-full p-3 bg-white rounded-xl border border-gray-200 focus:ring-2 focus:ring-cyan-400 outline-none"
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    if(val && !formData.marketingChannels.includes(val)) {
-                      setFormData(prev => ({...prev, marketingChannels: [...prev.marketingChannels, val]}));
-                    }
-                  }}
-                >
-                  <option value="">Add Marketing Channel...</option>
-                  {SOCIAL_CHANNELS.map(ch => <option key={ch} value={ch}>{ch}</option>)}
-                </select>
-                <div className="flex flex-wrap gap-2 mt-3">
-                  {formData.marketingChannels.map(ch => (
-                    <span key={ch} className="px-3 py-1 bg-navy-900 text-white text-[10px] font-bold rounded-full flex items-center gap-2">
-                      {ch}
-                      <button type="button" onClick={() => handleCheckbox('marketingChannels', ch)} className="hover:text-cyan-400">×</button>
-                    </span>
                   ))}
                 </div>
               </div>
@@ -318,19 +344,6 @@ export const DriveForm: React.FC<DriveFormProps> = ({ user, onSubmit }) => {
           )}
         </div>
       </form>
-
-      {step === 4 && (
-        <div className="mt-8 bg-cyan-50 p-6 rounded-2xl border border-cyan-100 flex items-center justify-between">
-           <div>
-             <p className="text-cyan-800 text-sm font-bold uppercase tracking-wide">Potential Commission</p>
-             <p className="text-2xl font-black text-navy-900">₦{(formData.noOfUnits * 450).toLocaleString()}</p>
-           </div>
-           <div className="text-right">
-             <p className="text-xs text-cyan-700">Calculated at ₦450/unit</p>
-             <p className="text-xs text-cyan-700">Resident Plan: ₦1,500/month</p>
-           </div>
-        </div>
-      )}
     </div>
   );
 };

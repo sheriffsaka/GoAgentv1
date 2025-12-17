@@ -1,3 +1,4 @@
+
 export type UserRole = 'ADMIN' | 'AGENT';
 
 export interface User {
@@ -20,6 +21,13 @@ export interface User {
 
 export type SubmissionStatus = 'PENDING' | 'APPROVED' | 'PAID';
 
+export interface VerificationResult {
+  score: number;
+  verdict: 'AUTHENTIC' | 'SUSPICIOUS' | 'INCONCLUSIVE';
+  findings: string;
+  sources: { title: string; uri: string }[];
+}
+
 export interface DriveSubmission {
   id: string;
   agentId: string;
@@ -32,6 +40,8 @@ export interface DriveSubmission {
   propertyName: string;
   propertyAddress: string;
   stateLocation: string;
+  coordinates?: { lat: number; lng: number };
+  propertyPhoto?: string; // Base64 or URL
 
   // Step 2: Property Metrics
   propertyCategory: 'Residential' | 'Commercial';
@@ -52,6 +62,7 @@ export interface DriveSubmission {
   marketingChannels: string[];
   feedback: string;
 
-  // Calculated
+  // Calculated & AI Verification
   estimatedCommission: number;
+  verification?: VerificationResult;
 }

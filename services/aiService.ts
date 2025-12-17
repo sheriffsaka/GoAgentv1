@@ -1,13 +1,69 @@
 
-import { GoogleGenAI } from "@google/genai";
-import { DriveSubmission } from "../types";
+import { GoogleGenAI, Type } from "@google/genai";
+import { DriveSubmission, VerificationResult } from "../types";
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 export const AIService = {
   /**
-   * Uses Gemini to analyze a property lead and provide a summary + score.
+   * Uses Gemini with Search Grounding to verify if a property lead is legitimate.
    */
+  verifyFieldVisit: async (submission: DriveSubmission): Promise<VerificationResult> => {
+    const prompt = `
+      Verify the existence and details of the following property lead in Nigeria:
+      Property Name: ${submission.propertyName}
+      Address: ${submission.propertyAddress}, ${submission.stateLocation}
+      Claimed Details: ${submission.propertyType} with approximately ${submission.noOfUnits} units.
+      
+      Tasks:
+      1. Use Google Search to find if this property actually exists at this address.
+      2. Check if the reported unit count and type (Residential/Commercial) match public records or maps.
+      3. Identify any red flags (e.g., address belongs to a different building, property is known by a different name).
+      4. Provide a Verification Score (0-100) and a verdict: AUTHENTIC, SUSPICIOUS, or INCONCLUSIVE.
+    `;
+
+    try {
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: prompt,
+        config: {
+          tools: [{ googleSearch: {} }],
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              score: { type: Type.NUMBER },
+              verdict: { type: Type.STRING },
+              findings: { type: Type.STRING },
+              sources: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    title: { type: Type.STRING },
+                    uri: { type: Type.STRING }
+                  }
+                }
+              }
+            },
+            required: ["score", "verdict", "findings", "sources"]
+          }
+        },
+      });
+
+      const result = JSON.parse(response.text);
+      return result;
+    } catch (error) {
+      console.error("AI Verification Error:", error);
+      return {
+        score: 0,
+        verdict: 'INCONCLUSIVE',
+        findings: "System error during AI verification. Manual review required.",
+        sources: []
+      };
+    }
+  },
+
   analyzeLead: async (submission: DriveSubmission) => {
     const prompt = `
       As a Real Estate Growth Expert for EstateGO, analyze this property lead:
@@ -32,9 +88,6 @@ export const AIService = {
     }
   },
 
-  /**
-   * Fetches latest Nigerian real estate trends using Google Search Grounding.
-   */
   getMarketIntel: async () => {
     const prompt = "What are the latest real estate market trends and property management news in Nigeria for 2024? Focus on prop-tech and estate management.";
     

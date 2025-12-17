@@ -1,5 +1,6 @@
+
 import React, { useState, useEffect } from 'react';
-import { User, DriveSubmission, SubmissionStatus } from './types';
+import { User, DriveSubmission, SubmissionStatus, VerificationResult } from './types';
 import { MockService } from './services/mockService';
 import { Auth, AgreementWall } from './components/Auth';
 import { Layout } from './components/Layout';
@@ -36,9 +37,10 @@ const App: React.FC = () => {
     setSubmissions(prev => [newSub, ...prev]);
   };
 
-  const handleUpdateStatus = async (id: string, status: SubmissionStatus) => {
+  const handleUpdateStatus = async (id: string, status: SubmissionStatus, verification?: VerificationResult) => {
     await MockService.updateStatus(id, status);
-    setSubmissions(prev => prev.map(s => s.id === id ? { ...s, status } : s));
+    // Note: In a real app we'd also save the verification result to DB
+    setSubmissions(prev => prev.map(s => s.id === id ? { ...s, status, verification: verification || s.verification } : s));
   };
 
   if (!user) {

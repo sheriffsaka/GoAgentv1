@@ -1,5 +1,7 @@
 {
   "name": "GoAgent - EstateGO Internal",
   "description": "Internal growth and commission tracking application for EstateGO agents. Features secure onboarding, drive reporting, and commission analytics.",
-  "requestFramePermissions": []
+  "requestFramePermissions": [
+    "geolocation"
+  ]
 }
