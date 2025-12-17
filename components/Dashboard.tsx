@@ -1,6 +1,6 @@
 import React from 'react';
 import { User, DriveSubmission } from '../types';
-import { Wallet, Users, Target, Clock, ArrowUpRight } from 'lucide-react';
+import { Wallet, Users, Target, Clock, ArrowUpRight, CheckCircle, FileText } from 'lucide-react';
 
 interface DashboardProps {
   user: User;
@@ -22,12 +22,16 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, submissions }) => {
 
   const totalResidents = agentSubmissions.reduce((acc, curr) => acc + curr.noOfUnits, 0);
   const totalSubmissions = agentSubmissions.length;
+  
+  // Admin Specific Metrics
+  const onboardedCount = submissions.filter(s => s.status === 'PAID').length;
+  const submittedCount = submissions.length;
 
-  // Simple Trend Data Generation
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'];
+  // 12 Months Data
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   const trendData = months.map((m, i) => ({
     month: m,
-    value: Math.floor(Math.random() * 40) + 10 + (i * 5)
+    value: Math.floor(Math.random() * 40) + 10 + (i * 2) // Mock growth
   }));
 
   return (
@@ -39,23 +43,41 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, submissions }) => {
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div className="bg-gradient-to-br from-navy-900 to-navy-800 p-6 rounded-2xl shadow-lg text-white relative overflow-hidden group">
-          <div className="absolute -right-4 -bottom-4 bg-white/10 p-8 rounded-full blur-2xl group-hover:bg-cyan-400/20 transition-all duration-500"></div>
-          <Wallet className="mb-4 text-cyan-400" size={28} />
-          <p className="text-navy-100 text-sm font-medium uppercase tracking-wider">Total Commission Earned</p>
-          <p className="text-3xl font-bold mt-2">₦{totalEarned.toLocaleString()}</p>
-          <div className="mt-4 flex items-center gap-1 text-xs text-cyan-400">
-            <ArrowUpRight size={14} />
-            <span>+12.5% from last month</span>
-          </div>
-        </div>
-
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
-          <Clock className="mb-4 text-orange-500" size={28} />
-          <p className="text-gray-500 text-sm font-medium uppercase tracking-wider">Pending Payouts</p>
-          <p className="text-3xl font-bold mt-2 text-navy-900">₦{pendingCommission.toLocaleString()}</p>
-          <p className="text-xs text-gray-400 mt-4 italic">7 day processing cycle</p>
-        </div>
+        {user.role === 'ADMIN' ? (
+          <>
+            <div className="bg-navy-900 p-6 rounded-2xl shadow-lg text-white">
+              <FileText className="mb-4 text-cyan-400" size={28} />
+              <p className="text-navy-100 text-sm font-medium uppercase tracking-wider">Total Submitted</p>
+              <p className="text-3xl font-bold mt-2">{submittedCount}</p>
+              <p className="text-xs text-navy-300 mt-4">All agent leads</p>
+            </div>
+            <div className="bg-cyan-400 p-6 rounded-2xl shadow-lg text-navy-900">
+              <CheckCircle className="mb-4 text-navy-900" size={28} />
+              <p className="text-navy-800 text-sm font-medium uppercase tracking-wider">Total Onboarded</p>
+              <p className="text-3xl font-bold mt-2">{onboardedCount}</p>
+              <p className="text-xs text-navy-700 mt-4">Verified & Paid leads</p>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="bg-gradient-to-br from-navy-900 to-navy-800 p-6 rounded-2xl shadow-lg text-white relative overflow-hidden group">
+              <div className="absolute -right-4 -bottom-4 bg-white/10 p-8 rounded-full blur-2xl group-hover:bg-cyan-400/20 transition-all duration-500"></div>
+              <Wallet className="mb-4 text-cyan-400" size={28} />
+              <p className="text-navy-100 text-sm font-medium uppercase tracking-wider">Total Commission Earned</p>
+              <p className="text-3xl font-bold mt-2">₦{totalEarned.toLocaleString()}</p>
+              <div className="mt-4 flex items-center gap-1 text-xs text-cyan-400">
+                <ArrowUpRight size={14} />
+                <span>+12.5% from last month</span>
+              </div>
+            </div>
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
+              <Clock className="mb-4 text-orange-500" size={28} />
+              <p className="text-gray-500 text-sm font-medium uppercase tracking-wider">Pending Payouts</p>
+              <p className="text-3xl font-bold mt-2 text-navy-900">₦{pendingCommission.toLocaleString()}</p>
+              <p className="text-xs text-gray-400 mt-4 italic">7 day processing cycle</p>
+            </div>
+          </>
+        )}
 
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
           <Users className="mb-4 text-cyan-500" size={28} />
@@ -75,17 +97,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, submissions }) => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Trend Chart - Custom SVG */}
-        <div className="lg:col-span-2 bg-white p-8 rounded-2xl border border-gray-100 shadow-sm">
-          <div className="flex justify-between items-center mb-8">
-            <h3 className="text-lg font-bold text-navy-900">Onboarding Drive Trends</h3>
-            <select className="text-sm border-none bg-gray-50 rounded-lg px-3 py-1 text-gray-600 outline-none">
-              <option>Last 6 Months</option>
-              <option>Year to Date</option>
-            </select>
+        {/* Trend Chart - 12 Months */}
+        <div className="lg:col-span-2 bg-white p-8 rounded-2xl border border-gray-100 shadow-sm overflow-x-auto">
+          <div className="flex justify-between items-center mb-8 min-w-[600px]">
+            <h3 className="text-lg font-bold text-navy-900">Onboarding Drive Trends (Jan - Dec)</h3>
+            <div className="flex gap-2">
+               <span className="flex items-center gap-1 text-xs text-gray-500"><span className="w-2 h-2 rounded-full bg-navy-900"></span> Lead Activity</span>
+            </div>
           </div>
-          <div className="h-64 flex items-end justify-between gap-4 px-4 relative">
-             {/* Simple Grid Lines */}
+          <div className="h-64 flex items-end justify-between gap-2 px-2 relative min-w-[600px]">
              <div className="absolute inset-0 border-b border-gray-100"></div>
              <div className="absolute top-1/2 left-0 right-0 border-b border-gray-50"></div>
              <div className="absolute top-1/4 left-0 right-0 border-b border-gray-50"></div>
@@ -93,14 +113,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, submissions }) => {
              {trendData.map((d, i) => (
                <div key={i} className="flex-1 flex flex-col items-center group relative z-10">
                  <div 
-                   className="w-full max-w-[40px] bg-navy-900 rounded-t-lg transition-all duration-500 ease-out group-hover:bg-cyan-400"
+                   className="w-full max-w-[24px] bg-navy-900 rounded-t-sm transition-all duration-500 ease-out group-hover:bg-cyan-400"
                    style={{ height: `${d.value}%` }}
                  >
-                   <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-navy-900 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-                     {d.value} Units
+                   <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-navy-900 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-20">
+                     {d.value}
                    </div>
                  </div>
-                 <span className="text-xs font-medium text-gray-400 mt-4">{d.month}</span>
+                 <span className="text-[10px] font-bold text-gray-400 mt-4">{d.month}</span>
                </div>
              ))}
           </div>
@@ -110,7 +130,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, submissions }) => {
         <div className="bg-white p-8 rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
           <h3 className="text-lg font-bold text-navy-900 mb-6">Recent Activity</h3>
           <div className="space-y-6">
-            {agentSubmissions.slice(0, 4).length > 0 ? agentSubmissions.slice(0, 4).map((s) => (
+            {agentSubmissions.slice(0, 5).length > 0 ? agentSubmissions.slice(0, 5).map((s) => (
               <div key={s.id} className="flex gap-4 items-start">
                 <div className={`w-2 h-2 rounded-full mt-2 shrink-0 ${
                   s.status === 'PAID' ? 'bg-emerald-500' : s.status === 'APPROVED' ? 'bg-cyan-500' : 'bg-orange-500'
@@ -127,11 +147,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, submissions }) => {
               </div>
             )}
           </div>
-          {agentSubmissions.length > 0 && (
-            <button className="w-full mt-8 py-2 text-sm font-semibold text-cyan-600 hover:text-cyan-700 transition-colors border-t pt-4">
-              View All Reports
-            </button>
-          )}
         </div>
       </div>
     </div>

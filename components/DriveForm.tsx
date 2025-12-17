@@ -1,6 +1,22 @@
 import React, { useState } from 'react';
 import { User, DriveSubmission } from '../types';
-import { ChevronLeft, ChevronRight, CheckCircle2, Building2, MapPin, Calculator, PhoneCall, Sparkles } from 'lucide-react';
+import { ChevronLeft, ChevronRight, CheckCircle2, Building2, MapPin, PhoneCall, Sparkles } from 'lucide-react';
+
+const NIGERIAN_STATES = [
+  "Abia", "Adamawa", "Akwa Ibom", "Anambra", "Bauchi", "Bayelsa", "Benue", "Borno", 
+  "Cross River", "Delta", "Ebonyi", "Edo", "Ekiti", "Enugu", "FCT - Abuja", "Gombe", 
+  "Imo", "Jigawa", "Kaduna", "Kano", "Katsina", "Kebbi", "Kogi", "Kwara", "Lagos", 
+  "Nasarawa", "Niger", "Ogun", "Ondo", "Osun", "Oyo", "Plateau", "Rivers", "Sokoto", 
+  "Taraba", "Yobe", "Zamfara"
+];
+
+const PROPERTY_TYPES = [
+  "Malls", "Small Estate", "Large Estate", "High-rise Building", "Shop Complex", "Gated Community", "Corporate Office"
+];
+
+const SOCIAL_CHANNELS = [
+  "Facebook", "Instagram", "Twitter (X)", "LinkedIn", "WhatsApp", "TikTok", "YouTube", "Other Referral"
+];
 
 interface DriveFormProps {
   user: User;
@@ -21,14 +37,14 @@ export const DriveForm: React.FC<DriveFormProps> = ({ user, onSubmit }) => {
     propertyCategory: 'Residential' as 'Residential' | 'Commercial',
     propertyType: '',
     noOfUnits: 0,
-    occupancyRate: 0,
+    occupancyRate: 50,
     meteringType: 'Prepaid',
     landlordName: '',
     managementType: 'Individual' as 'Individual' | 'Company',
     contactPhone: '',
     interestLevel: 'High' as 'High' | 'Medium' | 'Low',
     featuresInterested: [] as string[],
-    subscriptionType: 'Monthly',
+    subscriptionType: 'Residential',
     marketingChannels: [] as string[],
     feedback: ''
   });
@@ -90,11 +106,10 @@ export const DriveForm: React.FC<DriveFormProps> = ({ user, onSubmit }) => {
 
   return (
     <div className="max-w-3xl mx-auto">
-      <div className="mb-8">
+      <div className="mb-8 text-center md:text-left">
         <h2 className="text-2xl font-bold text-navy-900">GoAgent Drive Report</h2>
         <p className="text-gray-500">Step {step} of 4: {['Agent & Location', 'Property Metrics', 'Contact Info', 'Sales Intel'][step-1]}</p>
         
-        {/* Progress Bar */}
         <div className="mt-6 h-2 w-full bg-gray-200 rounded-full overflow-hidden">
           <div 
             className="h-full bg-cyan-400 transition-all duration-500 ease-out"
@@ -103,7 +118,7 @@ export const DriveForm: React.FC<DriveFormProps> = ({ user, onSubmit }) => {
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 space-y-8">
+      <form onSubmit={handleSubmit} className="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-gray-100 space-y-8">
         
         {step === 1 && (
           <div className="space-y-6 animate-in slide-in-from-right duration-300">
@@ -133,7 +148,10 @@ export const DriveForm: React.FC<DriveFormProps> = ({ user, onSubmit }) => {
               </div>
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">State / Location</label>
-                <input required name="stateLocation" value={formData.stateLocation} onChange={handleChange} className="w-full p-3 bg-white rounded-xl border border-gray-200 focus:ring-2 focus:ring-cyan-400 outline-none" placeholder="e.g. Lagos, Nigeria" />
+                <select required name="stateLocation" value={formData.stateLocation} onChange={handleChange} className="w-full p-3 bg-white rounded-xl border border-gray-200 focus:ring-2 focus:ring-cyan-400 outline-none">
+                  <option value="">Select State</option>
+                  {NIGERIAN_STATES.map(state => <option key={state} value={state}>{state}</option>)}
+                </select>
               </div>
             </div>
           </div>
@@ -155,15 +173,27 @@ export const DriveForm: React.FC<DriveFormProps> = ({ user, onSubmit }) => {
               </div>
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">Property Type</label>
-                <input required name="propertyType" value={formData.propertyType} onChange={handleChange} className="w-full p-3 bg-white rounded-xl border border-gray-200 focus:ring-2 focus:ring-cyan-400 outline-none" placeholder="Malls, Estates, High-rise, etc." />
+                <select required name="propertyType" value={formData.propertyType} onChange={handleChange} className="w-full p-3 bg-white rounded-xl border border-gray-200 focus:ring-2 focus:ring-cyan-400 outline-none">
+                  <option value="">Select Type</option>
+                  {PROPERTY_TYPES.map(type => <option key={type} value={type}>{type}</option>)}
+                </select>
               </div>
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">No. of Units</label>
                 <input type="number" required name="noOfUnits" value={formData.noOfUnits} onChange={handleChange} className="w-full p-3 bg-white rounded-xl border border-gray-200 focus:ring-2 focus:ring-cyan-400 outline-none" />
               </div>
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Occupancy Rate (%)</label>
-                <input type="number" required name="occupancyRate" value={formData.occupancyRate} onChange={handleChange} className="w-full p-3 bg-white rounded-xl border border-gray-200 focus:ring-2 focus:ring-cyan-400 outline-none" />
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Occupancy Rate: <span className="text-cyan-600 font-bold">{formData.occupancyRate}%</span></label>
+                <input 
+                  type="range" 
+                  min="0" 
+                  max="100" 
+                  step="1"
+                  name="occupancyRate" 
+                  value={formData.occupancyRate} 
+                  onChange={handleChange} 
+                  className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-cyan-400" 
+                />
               </div>
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">Metering Type</label>
@@ -213,17 +243,16 @@ export const DriveForm: React.FC<DriveFormProps> = ({ user, onSubmit }) => {
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">Interest Level</label>
                 <select name="interestLevel" value={formData.interestLevel} onChange={handleChange} className="w-full p-3 bg-white rounded-xl border border-gray-200 focus:ring-2 focus:ring-cyan-400 outline-none">
-                  <option value="High">High</option>
-                  <option value="Medium">Medium</option>
-                  <option value="Low">Low</option>
+                  <option value="High">High Interest</option>
+                  <option value="Medium">Medium Interest</option>
+                  <option value="Low">Low Interest</option>
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Subscription Preference</label>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Subscription Type</label>
                 <select name="subscriptionType" value={formData.subscriptionType} onChange={handleChange} className="w-full p-3 bg-white rounded-xl border border-gray-200 focus:ring-2 focus:ring-cyan-400 outline-none">
-                  <option value="Monthly">Monthly Billing</option>
-                  <option value="Quarterly">Quarterly Billing</option>
-                  <option value="Annual">Annual Billing</option>
+                  <option value="Residential">Residential Plan (₦1,500/mo)</option>
+                  <option value="Commercial">Commercial Plan</option>
                 </select>
               </div>
               <div className="md:col-span-2">
@@ -241,16 +270,25 @@ export const DriveForm: React.FC<DriveFormProps> = ({ user, onSubmit }) => {
                 </div>
               </div>
               <div className="md:col-span-2">
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Marketing Channels Discovered Through</label>
-                <div className="flex flex-wrap gap-2">
-                  {['Facebook', 'Referral', 'Billboard', 'Direct Drive', 'Newspaper'].map(c => (
-                    <button 
-                      key={c} type="button" 
-                      onClick={() => handleCheckbox('marketingChannels', c)}
-                      className={`px-4 py-2 rounded-full text-xs font-bold transition-all ${formData.marketingChannels.includes(c) ? 'bg-navy-900 text-white shadow-md' : 'bg-gray-100 text-gray-600'}`}
-                    >
-                      {c}
-                    </button>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Marketing Channel (Discovery)</label>
+                <select 
+                  className="w-full p-3 bg-white rounded-xl border border-gray-200 focus:ring-2 focus:ring-cyan-400 outline-none"
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if(val && !formData.marketingChannels.includes(val)) {
+                      setFormData(prev => ({...prev, marketingChannels: [...prev.marketingChannels, val]}));
+                    }
+                  }}
+                >
+                  <option value="">Add Marketing Channel...</option>
+                  {SOCIAL_CHANNELS.map(ch => <option key={ch} value={ch}>{ch}</option>)}
+                </select>
+                <div className="flex flex-wrap gap-2 mt-3">
+                  {formData.marketingChannels.map(ch => (
+                    <span key={ch} className="px-3 py-1 bg-navy-900 text-white text-[10px] font-bold rounded-full flex items-center gap-2">
+                      {ch}
+                      <button type="button" onClick={() => handleCheckbox('marketingChannels', ch)} className="hover:text-cyan-400">×</button>
+                    </span>
                   ))}
                 </div>
               </div>
@@ -289,7 +327,7 @@ export const DriveForm: React.FC<DriveFormProps> = ({ user, onSubmit }) => {
            </div>
            <div className="text-right">
              <p className="text-xs text-cyan-700">Calculated at ₦450/unit</p>
-             <p className="text-xs text-cyan-700">Base Plan: ₦1,500/month</p>
+             <p className="text-xs text-cyan-700">Resident Plan: ₦1,500/month</p>
            </div>
         </div>
       )}
