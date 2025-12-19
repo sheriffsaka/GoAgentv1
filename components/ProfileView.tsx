@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { User } from '../types';
-import { Save, UserCircle, Landmark, Loader2, CheckCircle } from 'lucide-react';
+import { Save, UserCircle, Landmark, Loader2, CheckCircle, AlertCircle } from 'lucide-react';
 
 const NIGERIAN_STATES = [
   "Abia", "Adamawa", "Akwa Ibom", "Anambra", "Bauchi", "Bayelsa", "Benue", "Borno", 
@@ -19,6 +19,7 @@ interface ProfileViewProps {
 export const ProfileView: React.FC<ProfileViewProps> = ({ user, onUpdate }) => {
   const [loading, setLoading] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     fullName: user.fullName,
     phone: user.phone || '',
@@ -32,6 +33,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ user, onUpdate }) => {
     e.preventDefault();
     setLoading(true);
     setSaved(false);
+    setError(null);
     try {
       await onUpdate({
         fullName: formData.fullName,
@@ -45,8 +47,9 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ user, onUpdate }) => {
       });
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
-    } catch (err) {
-      alert("Error committing terminal updates. Please try again.");
+    } catch (err: any) {
+      console.error("Profile Update Error:", err);
+      setError(err.message || "Error committing terminal updates. Check your connection.");
     } finally {
       setLoading(false);
     }
@@ -60,6 +63,13 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ user, onUpdate }) => {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
+        {error && (
+          <div className="p-4 bg-red-50 border-l-4 border-red-500 text-red-700 text-xs rounded-lg shadow-sm flex items-center gap-3 animate-in fade-in">
+            <AlertCircle size={18} className="shrink-0" />
+            <p className="font-bold uppercase tracking-tight leading-tight">{error}</p>
+          </div>
+        )}
+
         <div className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100">
           <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-6 flex items-center gap-2">
             <UserCircle size={16} className="text-cyan-500" /> Identity Module
@@ -94,7 +104,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ user, onUpdate }) => {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <label className="block text-[10px] font-black text-gray-400 uppercase mb-2">Account ID</label>
+                <label className="block text-[10px] font-black text-gray-400 uppercase mb-2">Account Number</label>
                 <input type="text" value={formData.accountNumber} onChange={e => setFormData({...formData, accountNumber: e.target.value})} className="w-full p-4 bg-gray-50 rounded-2xl border border-gray-100 outline-none focus:bg-white focus:ring-2 focus:ring-navy-900 transition-all font-medium text-navy-900" maxLength={10} placeholder="10 Digits" />
               </div>
               <div>

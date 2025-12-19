@@ -33,29 +33,38 @@ export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
 
   // Automatically detect recovery links in URL
   useEffect(() => {
-    const hash = window.location.hash;
-    if (hash && hash.includes('type=recovery')) {
-      setView('NEW_PASSWORD');
-    }
+    const checkRecovery = () => {
+      const hash = window.location.hash;
+      // Detect recovery token in URL hash
+      if (hash && (hash.includes('type=recovery') || hash.includes('access_token='))) {
+        setView('NEW_PASSWORD');
+        // We keep the hash temporarily so Supabase can process the session
+      }
+    };
+
+    checkRecovery();
 
     if (supabase) {
-      const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
         if (event === 'PASSWORD_RECOVERY') {
           setView('NEW_PASSWORD');
+        }
+        if (event === 'SIGNED_IN' && view === 'NEW_PASSWORD') {
+          // Stay in NEW_PASSWORD view if we just signed in via recovery link
         }
       });
       return () => subscription.unsubscribe();
     }
-  }, []);
+  }, [view]);
 
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
+    setSuccessMsg(null);
     try {
       await SupabaseService.resetPassword(email);
       setSuccessMsg("Terminal Recovery Link Sent! Please check your email to set your new password.");
-      setTimeout(() => setView('LOGIN'), 5000);
     } catch (err: any) {
       setError(err.message || "Unable to trigger recovery.");
     } finally {
@@ -65,6 +74,10 @@ export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
 
   const handleUpdatePassword = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (password.length < 6) {
+      setError("Password must be at least 6 characters.");
+      return;
+    }
     if (password !== confirmPassword) {
       setError("Passwords do not match.");
       return;
@@ -73,13 +86,14 @@ export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
     setError(null);
     try {
       await SupabaseService.updateUserPassword(password);
-      setSuccessMsg("Password updated successfully! Redirecting to login...");
+      setSuccessMsg("Password updated successfully! You can now access your terminal.");
       setTimeout(() => {
-        setView('LOGIN');
-        setSuccessMsg(null);
-      }, 3000);
+        // Clear hash and reload to clean state
+        window.location.hash = '';
+        window.location.reload();
+      }, 2000);
     } catch (err: any) {
-      setError(err.message || "Unable to update password.");
+      setError(err.message || "Unable to update password. Your recovery link might have expired.");
     } finally {
       setLoading(false);
     }
@@ -95,7 +109,7 @@ export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
       if (view === 'REGISTER') {
         const role = adminCode === "ESTATEGO_ADMIN_2025" ? 'ADMIN' : 'AGENT';
         await SupabaseService.signUp(email, password, fullName, phone, state, null, role);
-        setSuccessMsg("Terminal Identity Established! You can now access your dashboard.");
+        setSuccessMsg("Terminal Identity Established! You can now sign in.");
         setTimeout(() => {
           setView('LOGIN');
           setSuccessMsg(null);
@@ -111,7 +125,7 @@ export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
             <div className="flex items-center gap-2 text-red-800 font-black uppercase text-[10px]">
               <AlertCircle size={14} /> Identity Already Secured
             </div>
-            <p className="text-[11px] text-red-700 leading-tight font-medium">This email is already registered. If you forgot your password, please use the recovery flow.</p>
+            <p className="text-[11px] text-red-700 leading-tight font-medium">This email is already registered. If you don't know your password, use the "Forgot Password" link to regain access.</p>
             <div className="flex gap-2">
               <button 
                 type="button"
@@ -202,22 +216,22 @@ export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
           ) : view === 'NEW_PASSWORD' ? (
             <form className="space-y-5" onSubmit={handleUpdatePassword}>
               <div className="p-4 bg-navy-50 rounded-xl border border-navy-100 mb-4">
-                <p className="text-[10px] font-bold text-navy-800 uppercase leading-tight">Secure session established. Please set your new terminal password below.</p>
+                <p className="text-[10px] font-bold text-navy-800 uppercase leading-tight">Identity verified. Please establish your new terminal password.</p>
               </div>
               <div>
-                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">New Password</label>
-                <input type="password" required value={password} onChange={e => setPassword(e.target.value)} className="block w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 outline-none focus:bg-white focus:ring-2 focus:ring-cyan-400 transition-all font-medium text-navy-900" placeholder="••••••••" />
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">New Terminal Password</label>
+                <input type="password" required value={password} onChange={e => setPassword(e.target.value)} className="block w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 outline-none focus:bg-white focus:ring-2 focus:ring-cyan-400 transition-all font-medium text-navy-900" placeholder="Min. 6 characters" />
               </div>
               <div>
                 <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Confirm New Password</label>
-                <input type="password" required value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} className="block w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 outline-none focus:bg-white focus:ring-2 focus:ring-cyan-400 transition-all font-medium text-navy-900" placeholder="••••••••" />
+                <input type="password" required value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} className="block w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 outline-none focus:bg-white focus:ring-2 focus:ring-cyan-400 transition-all font-medium text-navy-900" placeholder="Re-enter password" />
               </div>
               <button
                 type="submit"
                 disabled={loading}
                 className="w-full flex justify-center items-center gap-2 py-4 px-4 rounded-2xl shadow-xl text-sm font-black text-navy-900 bg-cyan-400 hover:bg-cyan-300 disabled:opacity-50 transition-all uppercase tracking-widest"
               >
-                {loading ? <RefreshCw className="animate-spin" /> : <><Lock size={18}/> Update Password</>}
+                {loading ? <RefreshCw className="animate-spin" /> : <><Lock size={18}/> Set New Password</>}
               </button>
             </form>
           ) : (
@@ -247,7 +261,7 @@ export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
                 <div className="flex justify-between items-center mb-1">
                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest">Terminal Password</label>
                    {view === 'LOGIN' && (
-                     <button type="button" onClick={() => setView('RESET')} className="text-[10px] font-black text-cyan-600 hover:text-cyan-500 uppercase tracking-widest">Forgot Password</button>
+                     <button type="button" onClick={() => setView('RESET')} className="text-[10px] font-black text-cyan-600 hover:text-cyan-500 uppercase tracking-widest italic"> Forgot Password</button>
                    )}
                 </div>
                 <input type="password" required value={password} onChange={e => setPassword(e.target.value)} className="block w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 outline-none focus:bg-white focus:ring-2 focus:ring-cyan-400 transition-all font-medium text-navy-900" placeholder="••••••••" />
@@ -261,7 +275,7 @@ export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
                   </div>
                   <div>
                     <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Ops Code</label>
-                    <input type="password" value={adminCode} onChange={e => setAdminCode(e.target.value)} className="block w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 outline-none focus:bg-white focus:ring-2 focus:ring-cyan-400 transition-all font-medium text-navy-900" placeholder="Admin Override Only" />
+                    <input type="password" value={adminCode} onChange={e => setAdminCode(e.target.value)} className="block w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 outline-none focus:bg-white focus:ring-2 focus:ring-navy-900 transition-all font-medium text-navy-900" placeholder="Admin Override Only" />
                   </div>
                 </div>
               )}

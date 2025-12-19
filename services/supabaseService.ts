@@ -66,9 +66,10 @@ export const SupabaseService = {
 
   resetPassword: async (email: string) => {
     if (!supabase) throw new Error("Database not connected");
-    // Ensure the redirect points back to the current application origin
+    // Dynamically get the current origin to ensure reset link points to the hosted app, not localhost
+    const redirectUrl = window.location.origin + window.location.pathname;
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: window.location.origin,
+      redirectTo: redirectUrl,
     });
     if (error) throw error;
     return true;
@@ -84,15 +85,18 @@ export const SupabaseService = {
   updateProfile: async (userId: string, updates: Partial<User>) => {
     if (!supabase) throw new Error("Database not connected");
     
-    const dbUpdates: any = {};
+    // We use upsert to ensure the row exists and is updated correctly, 
+    // bypasses some common RLS issues with strict updates.
+    const dbUpdates: any = { id: userId };
     if (updates.fullName !== undefined) dbUpdates.full_name = updates.fullName;
     if (updates.phone !== undefined) dbUpdates.phone = updates.phone;
     if (updates.state !== undefined) dbUpdates.state = updates.state;
     if (updates.bankDetails !== undefined) dbUpdates.bank_details = updates.bankDetails;
 
-    const { error } = await supabase.from('profiles').update(dbUpdates).eq('id', userId);
-    if (error) throw error;
+    const { error: dbError } = await supabase.from('profiles').upsert(dbUpdates);
+    if (dbError) throw dbError;
 
+    // Synchronize auth metadata so the app has the latest name/state immediately on login
     await supabase.auth.updateUser({
       data: {
         full_name: updates.fullName,
@@ -222,7 +226,7 @@ export const SupabaseService = {
       agent_name: submission.agentName,
       property_name: submission.propertyName,
       property_address: submission.propertyAddress,
-      state_location: submission.state_location,
+      state_location: submission.stateLocation,
       coordinates: submission.coordinates,
       property_photo: submission.propertyPhoto,
       property_category: submission.propertyCategory,
@@ -233,7 +237,6 @@ export const SupabaseService = {
       landlord_name: submission.landlordName,
       management_type: submission.managementType,
       contact_phone: submission.contactPhone,
-      // Fix: Use correct property name interestLevel from DriveSubmission interface (fixes line 236 error)
       interest_level: submission.interestLevel,
       features_interested: submission.featuresInterested,
       subscription_type: submission.subscriptionType,
