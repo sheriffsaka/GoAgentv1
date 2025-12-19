@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { User, DriveSubmission } from '../types';
-import { ChevronLeft, ChevronRight, CheckCircle2, Building2, MapPin, PhoneCall, Sparkles, Camera, Locate, Loader2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, CheckCircle2, Building2, MapPin, PhoneCall, Sparkles, Camera, Locate, Loader2, MessageSquareText } from 'lucide-react';
 
 const NIGERIAN_STATES = [
   "Abia", "Adamawa", "Akwa Ibom", "Anambra", "Bauchi", "Bayelsa", "Benue", "Borno", 
@@ -15,8 +15,17 @@ const PROPERTY_TYPES = [
   "Malls", "Small Estate", "Large Estate", "High-rise Building", "Shop Complex", "Gated Community", "Corporate Office"
 ];
 
-const SOCIAL_CHANNELS = [
-  "Facebook", "Instagram", "Twitter (X)", "LinkedIn", "WhatsApp", "TikTok", "YouTube", "Other Referral"
+const FEATURES = [
+  'Resident App', 'Utility Billing', 'Security Mgt', 'Visitor Control', 'Facility Mgt'
+];
+
+const QUICK_FEEDBACKS = [
+  "Landlord is very interested in the billing automation.",
+  "Security is the main priority for this facility manager.",
+  "Property currently uses manual receipts and wants to go digital.",
+  "Concerns about the initial setup fee for the hardware.",
+  "Requested a follow-up demo for the board members.",
+  "High occupancy but struggles with debt recovery from tenants."
 ];
 
 interface DriveFormProps {
@@ -92,22 +101,39 @@ export const DriveForm: React.FC<DriveFormProps> = ({ user, onSubmit }) => {
     }
   };
 
-  const handleCheckbox = (list: 'featuresInterested' | 'marketingChannels', item: string) => {
+  const toggleFeature = (feature: string) => {
     setFormData(prev => {
-      const current = prev[list];
-      if (current.includes(item)) {
-        return { ...prev, [list]: current.filter(i => i !== item) };
+      const current = prev.featuresInterested;
+      if (current.includes(feature)) {
+        return { ...prev, featuresInterested: current.filter(i => i !== feature) };
       }
-      return { ...prev, [list]: [...current, item] };
+      return { ...prev, featuresInterested: [...current, feature] };
     });
+  };
+
+  const addQuickFeedback = (text: string) => {
+    setFormData(prev => ({
+      ...prev,
+      feedback: prev.feedback ? `${prev.feedback}\n${text}` : text
+    }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.coordinates && step === 4) {
-      alert("Please capture your location to prove the field visit.");
+    
+    // Only proceed with final submission if we are on step 4
+    if (step < 4) {
+      setStep(s => s + 1);
       return;
     }
+    
+    // Final validations
+    if (!formData.coordinates) {
+      alert("Verification Error: Please capture your current GPS location in Step 1 to confirm your physical presence at the site.");
+      setStep(1);
+      return;
+    }
+
     setLoading(true);
     try {
       await onSubmit({
@@ -115,14 +141,13 @@ export const DriveForm: React.FC<DriveFormProps> = ({ user, onSubmit }) => {
         agentId: user.id
       });
       setSuccess(true);
-    } catch (err) {
-      alert("Submission failed");
+    } catch (err: any) {
+      alert(`Submission Error: ${err.message || "Please check your network connection."}`);
     } finally {
       setLoading(false);
     }
   };
 
-  const nextStep = () => setStep(s => Math.min(s + 1, 4));
   const prevStep = () => setStep(s => Math.max(s - 1, 1));
 
   if (success) {
@@ -136,7 +161,7 @@ export const DriveForm: React.FC<DriveFormProps> = ({ user, onSubmit }) => {
           The property lead has been logged with proof of visit. Our AI and admin team will verify the details shortly.
         </p>
         <button 
-          onClick={() => { setSuccess(false); setStep(1); setFormData({...formData, propertyName: '', propertyAddress: '', propertyPhoto: undefined, coordinates: undefined}) }}
+          onClick={() => { setSuccess(false); setStep(1); setFormData({...formData, propertyName: '', propertyAddress: '', propertyPhoto: undefined, coordinates: undefined, feedback: '', featuresInterested: []}) }}
           className="bg-navy-900 text-white px-8 py-3 rounded-xl font-bold hover:bg-navy-800 transition-all shadow-lg"
         >
           Submit Another Report
@@ -295,7 +320,7 @@ export const DriveForm: React.FC<DriveFormProps> = ({ user, onSubmit }) => {
               <Sparkles size={24} />
               <h3 className="font-bold text-lg">Sales Intel & Feedback</h3>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 gap-6">
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">Interest Level</label>
                 <select name="interestLevel" value={formData.interestLevel} onChange={handleChange} className="w-full p-3 bg-white rounded-xl border border-gray-200 focus:ring-2 focus:ring-cyan-400 outline-none">
@@ -304,23 +329,52 @@ export const DriveForm: React.FC<DriveFormProps> = ({ user, onSubmit }) => {
                   <option value="Low">Low Interest</option>
                 </select>
               </div>
-              <div className="md:col-span-2">
+              <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">Features Interested In</label>
                 <div className="flex flex-wrap gap-2">
-                  {['Resident App', 'Utility Billing', 'Security Mgt', 'Visitor Control', 'Facility Mgt'].map(f => (
+                  {FEATURES.map(f => (
                     <button 
-                      key={f} type="button" 
-                      onClick={() => handleCheckbox('featuresInterested', f)}
-                      className={`px-4 py-2 rounded-full text-xs font-bold transition-all ${formData.featuresInterested.includes(f) ? 'bg-cyan-400 text-navy-900 shadow-md' : 'bg-gray-100 text-gray-600'}`}
+                      key={f} 
+                      type="button" 
+                      onClick={() => toggleFeature(f)}
+                      className={`px-4 py-2 rounded-full text-xs font-bold transition-all border ${formData.featuresInterested.includes(f) ? 'bg-cyan-400 border-cyan-500 text-navy-900 shadow-md' : 'bg-gray-100 border-transparent text-gray-600 hover:bg-gray-200'}`}
                     >
                       {f}
                     </button>
                   ))}
                 </div>
               </div>
-              <div className="md:col-span-2">
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Feedback / Notes</label>
-                <textarea name="feedback" value={formData.feedback} onChange={handleChange} rows={4} className="w-full p-3 bg-white rounded-xl border border-gray-200 focus:ring-2 focus:ring-cyan-400 outline-none" placeholder="Any additional notes from the site visit?" />
+
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-semibold text-gray-700">Quick Selection Feedback</label>
+                  <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Select to populate notes</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4">
+                  {QUICK_FEEDBACKS.map((text, i) => (
+                    <button 
+                      key={i} 
+                      type="button"
+                      onClick={() => addQuickFeedback(text)}
+                      className="text-left p-3 text-[10px] font-bold text-gray-600 bg-gray-50 border border-gray-200 rounded-xl hover:bg-cyan-50 hover:border-cyan-200 transition-all flex items-start gap-2 group"
+                    >
+                      <MessageSquareText size={14} className="shrink-0 text-gray-300 group-hover:text-cyan-400" />
+                      {text}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Agent Site Feedback / Detailed Notes</label>
+                <textarea 
+                  name="feedback" 
+                  value={formData.feedback} 
+                  onChange={handleChange} 
+                  rows={4} 
+                  className="w-full p-4 bg-gray-50 rounded-xl border border-gray-200 focus:ring-2 focus:ring-cyan-400 focus:bg-white outline-none transition-all" 
+                  placeholder="Record additional findings or observations from the site visit here..." 
+                />
               </div>
             </div>
           </div>
@@ -334,12 +388,24 @@ export const DriveForm: React.FC<DriveFormProps> = ({ user, onSubmit }) => {
           ) : <div />}
           
           {step < 4 ? (
-            <button type="button" onClick={nextStep} className="flex items-center gap-2 px-8 py-3 bg-navy-900 text-white rounded-xl font-bold hover:bg-navy-800 transition-all shadow-lg">
+            <button 
+              type="submit" 
+              className="flex items-center gap-2 px-8 py-3 bg-navy-900 text-white rounded-xl font-bold hover:bg-navy-800 transition-all shadow-lg"
+            >
               Next Step <ChevronRight size={20} />
             </button>
           ) : (
-            <button type="submit" disabled={loading} className="flex items-center gap-2 px-10 py-3 bg-cyan-400 text-navy-900 rounded-xl font-bold hover:bg-cyan-500 transition-all shadow-lg disabled:opacity-50">
-              {loading ? 'Submitting...' : 'Submit Drive Report'}
+            <button 
+              type="submit" 
+              disabled={loading} 
+              className="flex items-center gap-2 px-10 py-3 bg-cyan-400 text-navy-900 rounded-xl font-bold hover:bg-cyan-500 transition-all shadow-lg disabled:opacity-50"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="animate-spin" size={20} />
+                  Reporting Lead...
+                </>
+              ) : 'Submit Final Drive Report'}
             </button>
           )}
         </div>

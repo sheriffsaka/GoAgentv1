@@ -1,15 +1,18 @@
+
 import React, { useState } from 'react';
 import { User } from '../types';
-import { MockService } from '../services/mockService';
-import { Loader2, ShieldCheck, Info } from 'lucide-react';
+import { SupabaseService } from '../services/supabaseService';
+import { Loader2, ShieldCheck, Info, AlertCircle, Lock, RefreshCw } from 'lucide-react';
 
 interface AuthProps {
-  onLogin: (user: User) => void;
+  onLogin: () => void;
 }
 
 export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
   const [isRegistering, setIsRegistering] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [showAdminCode, setShowAdminCode] = useState(false);
   
   // Form States
   const [fullName, setFullName] = useState('');
@@ -18,33 +21,45 @@ export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
   const [bankName, setBankName] = useState('');
   const [accountNumber, setAccountNumber] = useState('');
   const [accountName, setAccountName] = useState('');
+  const [adminCode, setAdminCode] = useState('');
+
+  const ADMIN_SECRET = "ESTATEGO_ADMIN_2025";
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setError(null);
     try {
-      let user: User;
       if (isRegistering) {
-        user = await MockService.register({
-          fullName,
-          email,
-          phone,
-          bankDetails: { bankName, accountNumber, accountName }
-        });
+        const role = adminCode === ADMIN_SECRET ? 'ADMIN' : 'AGENT';
+        await SupabaseService.signUp(email, fullName, phone, { bankName, accountNumber, accountName }, role);
+        alert("Account created successfully! You can now sign in.");
+        setIsRegistering(false);
       } else {
-        user = await MockService.login(email);
+        // Attempt Sign In
+        try {
+          await SupabaseService.signIn(email);
+          onLogin();
+        } catch (signInErr: any) {
+          if (signInErr.message?.includes("Invalid login credentials") || signInErr.status === 400) {
+            setError("Invalid email or password. If you just registered, ensure your email is correct. Default internal password is being used.");
+          } else {
+            throw signInErr;
+          }
+        }
       }
-      onLogin(user);
-    } catch (error) {
-      alert("Account not found. For testing, use the email shown in the 'Demo Credentials' section below.");
+    } catch (err: any) {
+      console.error("Auth Error:", err);
+      if (err.message?.includes("already registered") || err.code === "23505") {
+        setError("This email is already registered. Please sign in instead.");
+      } else if (err.message?.includes("rate limit")) {
+        setError("Too many attempts. Please wait a few minutes.");
+      } else {
+        setError(err.message || "An authentication error occurred.");
+      }
     } finally {
       setLoading(false);
     }
-  };
-
-  const setDemoAdmin = () => {
-    setEmail('admin@estatego.app');
-    setIsRegistering(false);
   };
 
   return (
@@ -55,132 +70,146 @@ export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
           src="https://estatego.app/asset/images/logo.png"
           alt="EstateGO"
         />
-        <h2 className="mt-6 text-center text-3xl font-extrabold text-navy-900">
-          {isRegistering ? 'Join the Growth Team' : 'Sign in to GoAgent'}
+        <h2 className="mt-6 text-center text-3xl font-extrabold text-navy-900 uppercase tracking-tighter">
+          {isRegistering ? 'Growth Team Signup' : 'GoAgent Terminal'}
         </h2>
         <p className="mt-2 text-center text-sm text-gray-600">
-          {isRegistering ? 'Already have an account? ' : 'New Agent? '}
+          {isRegistering ? 'Already part of the team? ' : 'New Field Agent? '}
           <button
-            onClick={() => setIsRegistering(!isRegistering)}
-            className="font-medium text-cyan-600 hover:text-cyan-500 underline decoration-dotted"
+            onClick={() => {
+              setIsRegistering(!isRegistering);
+              setError(null);
+            }}
+            className="font-bold text-cyan-600 hover:text-cyan-500 underline decoration-2 underline-offset-4"
           >
-            {isRegistering ? 'Sign in' : 'Register now'}
+            {isRegistering ? 'Login here' : 'Register now'}
           </button>
         </p>
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10 border-t-4 border-navy-900">
-          <form className="space-y-6" onSubmit={handleSubmit}>
-            {isRegistering && (
+        <div className="bg-white py-8 px-4 shadow-2xl sm:rounded-3xl sm:px-10 border-b-8 border-navy-900">
+          {error && (
+            <div className="mb-6 p-4 bg-red-50 border-l-4 border-red-500 text-red-700 text-xs flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
+              <AlertCircle size={16} className="shrink-0 mt-0.5" />
               <div>
-                <label className="block text-sm font-medium text-gray-700">Full Name</label>
-                <div className="mt-1">
-                  <input
-                    type="text"
-                    required
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                    className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-navy-900 focus:border-navy-900 sm:text-sm"
-                  />
-                </div>
+                <p className="font-bold">Authentication Failed</p>
+                <p className="mt-1">{error}</p>
+              </div>
+            </div>
+          )}
+          
+          <form className="space-y-5" onSubmit={handleSubmit}>
+            {isRegistering && (
+              <div className="animate-in fade-in slide-in-from-left-4 duration-300">
+                <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-1">Full Name</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="John Doe"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  className="block w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:ring-2 focus:ring-navy-900 outline-none transition-all"
+                />
               </div>
             )}
 
             <div>
-              <label className="block text-sm font-medium text-gray-700">Email address</label>
-              <div className="mt-1">
-                <input
-                  type="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-navy-900 focus:border-navy-900 sm:text-sm"
-                />
-              </div>
+              <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-1">Email Address</label>
+              <input
+                type="email"
+                required
+                placeholder="agent@estatego.app"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="block w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:ring-2 focus:ring-navy-900 outline-none transition-all"
+              />
             </div>
 
             {isRegistering && (
-              <>
+              <div className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-300">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Phone Number</label>
-                  <div className="mt-1">
-                    <input
-                      type="tel"
-                      required
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-navy-900 focus:border-navy-900 sm:text-sm"
-                    />
-                  </div>
+                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-1">Phone Number</label>
+                  <input
+                    type="tel"
+                    required
+                    placeholder="080 0000 0000"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    className="block w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:ring-2 focus:ring-navy-900 outline-none transition-all"
+                  />
                 </div>
 
-                <div className="border-t border-gray-200 pt-4">
-                  <h3 className="text-sm font-medium text-navy-900 mb-3">Bank Details (Payouts)</h3>
-                  <div className="grid grid-cols-1 gap-y-4">
+                <div className="pt-2">
+                  <div className="flex justify-between items-center mb-2">
+                    <h3 className="text-xs font-black text-navy-900 uppercase">Payout Destination</h3>
+                    <button 
+                      type="button" 
+                      onClick={() => setShowAdminCode(!showAdminCode)}
+                      className="text-[10px] font-bold text-gray-400 hover:text-navy-900 flex items-center gap-1 uppercase"
+                    >
+                      <Lock size={10} /> Admin Key
+                    </button>
+                  </div>
+                  
+                  {showAdminCode && (
+                    <div className="mb-4 p-3 bg-navy-900 rounded-xl animate-in zoom-in duration-200">
+                      <input
+                        type="password"
+                        placeholder="Secret Invitation Code"
+                        value={adminCode}
+                        onChange={(e) => setAdminCode(e.target.value)}
+                        className="block w-full px-3 py-2 bg-navy-800 border border-navy-700 text-cyan-400 text-sm rounded-lg outline-none"
+                      />
+                    </div>
+                  )}
+
+                  <div className="space-y-3">
                     <input
                       type="text"
                       placeholder="Bank Name"
                       required
                       value={bankName}
                       onChange={(e) => setBankName(e.target.value)}
-                      className="block w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-navy-900 focus:border-navy-900"
+                      className="block w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 text-sm outline-none"
                     />
-                     <input
-                      type="text"
-                      placeholder="Account Number"
-                      required
-                      value={accountNumber}
-                      onChange={(e) => setAccountNumber(e.target.value)}
-                      className="block w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-navy-900 focus:border-navy-900"
-                    />
-                     <input
-                      type="text"
-                      placeholder="Account Name"
-                      required
-                      value={accountName}
-                      onChange={(e) => setAccountName(e.target.value)}
-                      className="block w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-navy-900 focus:border-navy-900"
-                    />
+                    <div className="grid grid-cols-2 gap-3">
+                      <input
+                        type="text"
+                        placeholder="Acc. Number"
+                        required
+                        value={accountNumber}
+                        onChange={(e) => setAccountNumber(e.target.value)}
+                        className="block w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 text-sm outline-none"
+                      />
+                      <input
+                        type="text"
+                        placeholder="Acc. Name"
+                        required
+                        value={accountName}
+                        onChange={(e) => setAccountName(e.target.value)}
+                        className="block w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 text-sm outline-none"
+                      />
+                    </div>
                   </div>
                 </div>
-              </>
+              </div>
             )}
 
-            <div>
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-navy-900 bg-cyan-400 hover:bg-cyan-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-cyan-500 disabled:opacity-50 transition-colors"
-              >
-                {loading ? <Loader2 className="animate-spin h-5 w-5" /> : (isRegistering ? 'Register Account' : 'Sign In')}
-              </button>
-            </div>
+            {!isRegistering && (
+               <div className="p-4 bg-cyan-50 border border-cyan-100 rounded-2xl text-[10px] text-cyan-800 leading-relaxed font-bold uppercase tracking-tight">
+                 <p>EstateGO Internal Security: System-generated passwords apply to all field agent terminals.</p>
+               </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full flex justify-center items-center gap-2 py-4 px-4 border border-transparent rounded-2xl shadow-lg text-sm font-black text-navy-900 bg-cyan-400 hover:bg-cyan-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-cyan-500 disabled:opacity-50 transition-all uppercase tracking-widest"
+            >
+              {loading ? <RefreshCw className="animate-spin h-5 w-5" /> : (isRegistering ? 'Initialize Agent Account' : 'Authenticate')}
+            </button>
           </form>
-
-          {!isRegistering && (
-            <div className="mt-6">
-              <div className="relative">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-gray-300"></div>
-                </div>
-                <div className="relative flex justify-center text-sm">
-                  <span className="px-2 bg-white text-gray-500 uppercase font-bold text-[10px] tracking-widest">Demo Credentials</span>
-                </div>
-              </div>
-
-              <div className="mt-4 p-3 bg-navy-900/5 rounded-lg border border-navy-900/10 flex flex-col items-center">
-                <button 
-                  onClick={setDemoAdmin}
-                  className="flex items-center gap-2 text-navy-900 text-xs font-bold hover:text-navy-700 transition-colors"
-                >
-                  <Info size={14} className="text-cyan-600" />
-                  Use Admin Demo Account
-                </button>
-                <p className="text-[10px] text-gray-500 mt-1 italic">Email: admin@estatego.app</p>
-              </div>
-            </div>
-          )}
         </div>
       </div>
     </div>
@@ -188,7 +217,7 @@ export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
 };
 
 interface AgreementProps {
-  onSign: (user: User) => void;
+  onSign: () => void;
 }
 
 export const AgreementWall: React.FC<AgreementProps> = ({ onSign }) => {
@@ -197,51 +226,45 @@ export const AgreementWall: React.FC<AgreementProps> = ({ onSign }) => {
   const handleSign = async () => {
     setSigning(true);
     try {
-      const updatedUser = await MockService.signAgreement();
-      onSign(updatedUser);
+      await onSign();
     } catch (err) {
       console.error(err);
+      alert("Error signing agreement. Please try again.");
     } finally {
       setSigning(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
-      <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-        <div className="fixed inset-0 bg-navy-900 bg-opacity-75 transition-opacity" aria-hidden="true"></div>
-        <span className="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
-        <div className="inline-block align-bottom bg-white rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-2xl sm:w-full sm:p-6">
-          <div>
-            <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-cyan-100">
-              <ShieldCheck className="h-6 w-6 text-navy-900" />
-            </div>
-            <div className="mt-3 text-center sm:mt-5">
-              <h3 className="text-xl leading-6 font-bold text-navy-900" id="modal-title">
-                Freelance Agent Agreement
-              </h3>
-              <div className="mt-4 text-left h-80 overflow-y-auto border p-6 rounded-lg bg-gray-50 text-sm text-gray-700 space-y-4 leading-relaxed">
-                <p><strong className="text-navy-900">1. SCOPE OF SERVICES:</strong> The Agent is engaged as an independent contractor to onboard residential and commercial properties to the EstateGO platform.</p>
-                <p><strong className="text-navy-900">2. COMMISSION:</strong> A commission of <span className="text-cyan-600 font-semibold">N450 per resident/month</span> (30% of N1,500) will be paid for every successfully onboarded and paying unit.</p>
-                <p><strong className="text-navy-900">3. LIMITATIONS:</strong> Agents are capped at onboarding 1,000 estates per a 12-month period to ensure quality management.</p>
-                <p><strong className="text-navy-900">4. PAYMENT CYCLE:</strong> Commissions are processed within 7 days of the company receiving subscription funds from the client.</p>
-                <p><strong className="text-navy-900">5. DIGITAL SIGNATURE:</strong> By clicking "I Agree & Sign", you log a unique digital signature (Timestamp + IP Address) as binding acceptance of these terms.</p>
-                <div className="border-t pt-4 mt-6">
-                   <p className="text-xs text-gray-400 italic">Electronic record: Signature ID will be generated upon confirmation.</p>
-                </div>
-              </div>
-            </div>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
+      <div className="fixed inset-0 bg-navy-900 bg-opacity-95 backdrop-blur-sm transition-opacity"></div>
+      <div className="relative bg-white rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl animate-in zoom-in duration-300">
+        <div className="bg-navy-900 p-8 text-center border-b border-navy-800">
+          <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-cyan-400 mb-4">
+            <ShieldCheck className="h-8 w-8 text-navy-900" />
           </div>
-          <div className="mt-8 sm:mt-10">
-            <button
-              type="button"
-              onClick={handleSign}
-              disabled={signing}
-              className="inline-flex justify-center w-full rounded-md border border-transparent shadow-sm px-4 py-3 bg-navy-900 text-base font-semibold text-white hover:bg-navy-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-navy-900 transition-colors"
-            >
-              {signing ? <Loader2 className="animate-spin h-5 w-5" /> : 'I Agree & Sign Digital Agreement'}
-            </button>
+          <h3 className="text-2xl font-black text-white uppercase tracking-tighter">
+            Field Operations Agreement
+          </h3>
+        </div>
+        
+        <div className="p-8">
+          <div className="h-80 overflow-y-auto border border-gray-100 p-6 rounded-2xl bg-gray-50 text-sm text-gray-700 space-y-4 leading-relaxed custom-scrollbar">
+            <p><strong className="text-navy-900">1. SCOPE OF SERVICES:</strong> The Agent is engaged as an independent contractor to onboard residential and commercial properties to the EstateGO platform.</p>
+            <p><strong className="text-navy-900">2. COMMISSION:</strong> A commission of <span className="text-cyan-600 font-bold">N450 per resident/month</span> will be paid for every successfully onboarded and paying unit via the GoAgent platform.</p>
+            <p><strong className="text-navy-900">3. DATA INTEGRITY:</strong> All drives must include GPS coordinates and real property photos. Fraudulent entries will result in immediate termination and loss of accrued commissions.</p>
+            <p><strong className="text-navy-900">4. PAYMENT CYCLE:</strong> Commissions are disbursed on the 7th of every month following successful client payment reconciliation.</p>
+            <p><strong className="text-navy-900">5. DIGITAL SIGNATURE:</strong> Acceptance of these terms is logged with your Auth ID, Timestamp, and IP Address as a legally binding digital contract.</p>
           </div>
+          
+          <button
+            type="button"
+            onClick={handleSign}
+            disabled={signing}
+            className="mt-8 w-full rounded-2xl py-4 bg-navy-900 text-white font-black hover:bg-navy-800 transition-all uppercase tracking-widest shadow-xl flex justify-center items-center gap-2"
+          >
+            {signing ? <Loader2 className="animate-spin h-5 w-5" /> : 'I Bind My Signature to This Agreement'}
+          </button>
         </div>
       </div>
     </div>
