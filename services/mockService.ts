@@ -1,3 +1,4 @@
+
 import { User, DriveSubmission, SubmissionStatus } from '../types';
 
 const STORAGE_KEYS = {
@@ -7,22 +8,26 @@ const STORAGE_KEYS = {
 };
 
 // Initial Mock Data
+// Added missing 'state' property to fix type error
 const MOCK_ADMIN: User = {
   id: 'admin-1',
   fullName: 'EstateGO Admin',
   email: 'admin@estatego.app',
   phone: '08012345678',
+  state: 'Lagos',
   role: 'ADMIN',
   agreementSigned: true,
   createdAt: new Date('2024-01-01').toISOString(),
 };
 
+// Added missing 'state' property to seed agents
 const SEED_AGENTS: User[] = [
   {
     id: 'agent-101',
     fullName: 'John Doe',
     email: 'john@example.com',
     phone: '08122334455',
+    state: 'Lagos',
     role: 'AGENT',
     agreementSigned: true,
     createdAt: new Date('2024-02-15').toISOString(),
@@ -33,6 +38,7 @@ const SEED_AGENTS: User[] = [
     fullName: 'Sarah Williams',
     email: 'sarah@example.com',
     phone: '09055667788',
+    state: 'Rivers',
     role: 'AGENT',
     agreementSigned: false,
     createdAt: new Date('2024-03-01').toISOString(),
@@ -159,6 +165,7 @@ export const MockService = {
     await new Promise(resolve => setTimeout(resolve, 800));
     const allAgents = MockService.getAllAgents();
     
+    // Fixed: Added missing 'state' property from userData to satisfy User type requirement
     const newUser: User = {
       id: Math.random().toString(36).substr(2, 9),
       role: 'AGENT',
@@ -166,6 +173,7 @@ export const MockService = {
       fullName: userData.fullName || '',
       email: userData.email || '',
       phone: userData.phone || '',
+      state: userData.state || 'Lagos',
       bankDetails: userData.bankDetails,
       createdAt: new Date().toISOString(),
     };

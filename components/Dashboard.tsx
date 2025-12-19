@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { User, DriveSubmission } from '../types';
-import { Wallet, Users, Target, Clock, ArrowUpRight, CheckCircle, FileText, Sparkles, ExternalLink, RefreshCw } from 'lucide-react';
+import { Wallet, Users, Target, Clock, CheckCircle, Sparkles, RefreshCw, Layers, TrendingUp, ChevronRight, MapPin, Building2 } from 'lucide-react';
 import { AIService } from '../services/aiService';
 
 interface DashboardProps {
@@ -13,185 +13,173 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, submissions }) => {
   const [marketIntel, setMarketIntel] = useState<{ text: string; sources: any[] } | null>(null);
   const [loadingIntel, setLoadingIntel] = useState(false);
 
-  useEffect(() => {
-    fetchIntel();
-  }, []);
-
-  const fetchIntel = async () => {
-    setLoadingIntel(true);
+  useEffect(() => { fetchIntel(); }, []);
+  const fetchIntel = async () => { 
+    setLoadingIntel(true); 
     const intel = await AIService.getMarketIntel();
-    setMarketIntel(intel);
-    setLoadingIntel(false);
+    setMarketIntel(intel); 
+    setLoadingIntel(false); 
   };
 
-  const agentSubmissions = user.role === 'ADMIN' 
-    ? submissions 
-    : submissions.filter(s => s.agentId === user.id);
+  const agentSubmissions = user.role === 'ADMIN' ? submissions : submissions.filter(s => s.agentId === user.id);
 
-  const totalEarned = agentSubmissions
-    .filter(s => s.status === 'PAID')
-    .reduce((acc, curr) => acc + curr.estimatedCommission, 0);
-
-  const pendingCommission = agentSubmissions
-    .filter(s => s.status !== 'PAID')
-    .reduce((acc, curr) => acc + curr.estimatedCommission, 0);
-
-  const totalResidents = agentSubmissions.reduce((acc, curr) => acc + curr.noOfUnits, 0);
-  const totalSubmissions = agentSubmissions.length;
+  // Stats Logic
+  const totalCommissionPaid = agentSubmissions.filter(s => s.status === 'PAID').reduce((a, b) => a + b.estimatedCommission, 0);
+  const pendingPayouts = agentSubmissions.filter(s => s.status === 'APPROVED').reduce((a, b) => a + b.estimatedCommission, 0);
+  const totalUnits = agentSubmissions.reduce((a, b) => a + b.noOfUnits, 0);
   
-  // Real Data for Chart
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  const submissionsByMonth = months.map((m, i) => {
-    const count = agentSubmissions.filter(s => new Date(s.submissionDate).getMonth() === i).length;
-    // Scale for visualization
-    const scale = agentSubmissions.length > 0 ? (count / Math.max(...months.map((_, mi) => agentSubmissions.filter(s => new Date(s.submissionDate).getMonth() === mi).length)) * 80) : 5;
-    return { month: m, count, value: Math.max(scale, 5) };
-  });
+  // Admin-Specific stats
+  const totalVolume = submissions.reduce((a, b) => a + (b.estimatedCommission || 0), 0);
+  const totalDisbursed = submissions.filter(s => s.status === 'PAID').reduce((a, b) => a + (b.estimatedCommission || 0), 0);
+  const totalPendingPayouts = submissions.filter(s => s.status === 'APPROVED').reduce((a, b) => a + (b.estimatedCommission || 0), 0);
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500 pb-12">
+    <div className="space-y-6 md:space-y-8 animate-in fade-in duration-500 pb-12">
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-navy-900">Welcome back, {user.fullName.split(' ')[0]}!</h1>
-          <p className="text-gray-500 mt-1">Growth activity and market insights for EstateGO.</p>
+          <h1 className="text-2xl md:text-3xl font-black text-navy-900 tracking-tighter uppercase italic">HQ // Welcome, {user.fullName.split(' ')[0]}</h1>
+          <p className="text-gray-500 font-medium text-sm">EstateGO Field Operations Terminal</p>
         </div>
-        {user.role === 'AGENT' && (
-          <div className="bg-cyan-50 px-4 py-2 rounded-xl border border-cyan-100 flex items-center gap-2">
-            <Sparkles className="text-cyan-600" size={18} />
-            <span className="text-xs font-bold text-navy-900 uppercase tracking-wider">Top Performing Agent Tier</span>
-          </div>
-        )}
+        <div className="flex items-center gap-2 bg-white px-4 py-2 rounded-2xl shadow-sm border border-gray-100 w-fit">
+           <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+           <span className="text-[10px] font-black text-navy-900 uppercase tracking-widest">Network Active</span>
+        </div>
       </header>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
         {user.role === 'ADMIN' ? (
           <>
-            <div className="bg-navy-900 p-6 rounded-2xl shadow-lg text-white">
-              <FileText className="mb-4 text-cyan-400" size={28} />
-              <p className="text-navy-100 text-sm font-medium uppercase tracking-wider">Total Submitted</p>
-              <p className="text-3xl font-bold mt-2">{submissions.length}</p>
-              <p className="text-xs text-navy-300 mt-4">All agent leads</p>
-            </div>
-            <div className="bg-cyan-400 p-6 rounded-2xl shadow-lg text-navy-900">
-              <CheckCircle className="mb-4 text-navy-900" size={28} />
-              <p className="text-navy-800 text-sm font-medium uppercase tracking-wider">Total Onboarded</p>
-              <p className="text-3xl font-bold mt-2">{submissions.filter(s => s.status === 'PAID').length}</p>
-              <p className="text-xs text-navy-700 mt-4">Verified & Paid leads</p>
-            </div>
+            <StatCard icon={<Layers className="text-cyan-400" />} title="Total Commission Volume" value={`₦${totalVolume.toLocaleString()}`} subtitle="Gross Lead Value" color="navy" />
+            <StatCard icon={<Clock className="text-orange-400" />} title="Pending Payouts" value={`₦${totalPendingPayouts.toLocaleString()}`} subtitle="Awaiting Disbursement" color="white" />
+            <StatCard icon={<CheckCircle className="text-emerald-500" />} title="Total Disbursed" value={`₦${totalDisbursed.toLocaleString()}`} subtitle="Settled via Bank" color="white" />
+            <StatCard icon={<Users className="text-purple-400" />} title="Total Residents" value={totalUnits.toLocaleString()} subtitle="Managed Units" color="white" />
           </>
         ) : (
           <>
-            <div className="bg-gradient-to-br from-navy-900 to-navy-800 p-6 rounded-2xl shadow-lg text-white relative overflow-hidden group">
-              <div className="absolute -right-4 -bottom-4 bg-white/10 p-8 rounded-full blur-2xl group-hover:bg-cyan-400/20 transition-all duration-500"></div>
-              <Wallet className="mb-4 text-cyan-400" size={28} />
-              <p className="text-navy-100 text-sm font-medium uppercase tracking-wider">Total Commission Earned</p>
-              <p className="text-3xl font-bold mt-2">₦{totalEarned.toLocaleString()}</p>
-              <div className="mt-4 flex items-center gap-1 text-xs text-cyan-400">
-                <ArrowUpRight size={14} />
-                <span>+12.5% from last month</span>
-              </div>
-            </div>
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-              <Clock className="mb-4 text-orange-500" size={28} />
-              <p className="text-gray-500 text-sm font-medium uppercase tracking-wider">Pending Payouts</p>
-              <p className="text-3xl font-bold mt-2 text-navy-900">₦{pendingCommission.toLocaleString()}</p>
-              <p className="text-xs text-gray-400 mt-4 italic">7 day processing cycle</p>
-            </div>
+            <StatCard icon={<Wallet className="text-cyan-400" />} title="Total Earned (Paid)" value={`₦${totalCommissionPaid.toLocaleString()}`} subtitle="Credited to Bank" color="navy" />
+            <StatCard icon={<Clock className="text-orange-400" />} title="Pending Payouts" value={`₦${pendingPayouts.toLocaleString()}`} subtitle="In Approval Flow" color="white" />
+            <StatCard icon={<Target className="text-emerald-500" />} title="Activity Rank" value={`${agentSubmissions.length}`} subtitle="Current Submissions" color="white" />
+            <StatCard icon={<TrendingUp className="text-purple-500" />} title="Total Units" value={totalUnits.toLocaleString()} subtitle="Onboarded Residents" color="white" />
           </>
         )}
-
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-          <Users className="mb-4 text-cyan-500" size={28} />
-          <p className="text-gray-500 text-sm font-medium uppercase tracking-wider">Total Residents</p>
-          <p className="text-3xl font-bold mt-2 text-navy-900">{totalResidents.toLocaleString()}</p>
-          <div className="mt-4 w-full bg-gray-100 h-2 rounded-full overflow-hidden">
-            <div className="bg-cyan-400 h-full w-[65%]" />
-          </div>
-        </div>
-
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-          <Target className="mb-4 text-emerald-500" size={28} />
-          <p className="text-gray-500 text-sm font-medium uppercase tracking-wider">Estate Cap Track</p>
-          <p className="text-3xl font-bold mt-2 text-navy-900">{totalSubmissions} / 1000</p>
-          <p className="text-xs text-gray-400 mt-4">12-month rolling period</p>
-        </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Trend Chart */}
-        <div className="lg:col-span-2 bg-white p-8 rounded-2xl border border-gray-100 shadow-sm">
-          <h3 className="text-lg font-bold text-navy-900 mb-8">Onboarding Drive Trends</h3>
-          <div className="h-64 flex items-stretch justify-between gap-2 px-2 relative">
-             <div className="absolute inset-x-0 bottom-0 border-b border-gray-100"></div>
-             {submissionsByMonth.map((d, i) => (
-               <div key={i} className="flex-1 flex flex-col justify-end items-center group relative z-10">
-                 <div 
-                   className="w-full max-w-[28px] bg-navy-900 rounded-t-md transition-all duration-500 ease-out group-hover:bg-cyan-400"
-                   style={{ height: `${d.value}%` }}
-                 >
-                   <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-navy-900 text-white text-[10px] font-bold px-2 py-1 rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-                     {d.count} Leads
-                   </div>
-                 </div>
-                 <span className="text-[10px] font-bold text-gray-400 mt-4 uppercase tracking-tighter">
-                   {d.month}
-                 </span>
-               </div>
-             ))}
+      {/* AGENT VIEW: SUBMISSION HISTORY (RESPONSIVE) */}
+      {user.role === 'AGENT' && (
+        <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+          <div className="p-6 border-b border-gray-50 flex justify-between items-center">
+            <h3 className="font-black text-navy-900 uppercase tracking-widest text-sm">My Lead History</h3>
+            <span className="text-[10px] font-bold text-gray-400 uppercase">{agentSubmissions.length} Entries</span>
+          </div>
+
+          {/* Desktop Table */}
+          <div className="hidden md:block overflow-x-auto">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="bg-gray-50 text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                  <th className="px-6 py-4">Property</th>
+                  <th className="px-6 py-4 text-center">Units</th>
+                  <th className="px-6 py-4">Status</th>
+                  <th className="px-6 py-4 text-right">Commission</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {agentSubmissions.length === 0 ? (
+                   <tr><td colSpan={4} className="p-12 text-center text-gray-400 font-bold uppercase text-xs">No reports yet. Capture your first site today.</td></tr>
+                ) : agentSubmissions.map(s => (
+                  <tr key={s.id} className="hover:bg-gray-50 transition-colors">
+                    <td className="px-6 py-4">
+                      <p className="text-sm font-bold text-navy-900">{s.propertyName}</p>
+                      <p className="text-[10px] text-gray-400">{s.stateLocation} • {new Date(s.submissionDate).toLocaleDateString()}</p>
+                    </td>
+                    <td className="px-6 py-4 text-center font-bold text-navy-900 text-sm">{s.noOfUnits}</td>
+                    <td className="px-6 py-4">
+                      <StatusBadge status={s.status} />
+                    </td>
+                    <td className="px-6 py-4 text-right font-black text-cyan-600 text-sm">₦{s.estimatedCommission?.toLocaleString() || '0'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Mobile Card List */}
+          <div className="md:hidden divide-y divide-gray-50">
+            {agentSubmissions.length === 0 ? (
+              <div className="p-12 text-center text-gray-400 font-bold uppercase text-xs">No reports yet.</div>
+            ) : agentSubmissions.map(s => (
+              <div key={s.id} className="p-4 space-y-3">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h4 className="text-sm font-black text-navy-900">{s.propertyName}</h4>
+                    <p className="text-[10px] text-gray-400 uppercase font-bold">{s.stateLocation}</p>
+                  </div>
+                  <StatusBadge status={s.status} />
+                </div>
+                <div className="flex justify-between items-center pt-2">
+                  <div className="flex items-center gap-2 text-xs text-gray-500 font-bold">
+                    <Building2 size={12}/> {s.noOfUnits} Units
+                  </div>
+                  <div className="text-sm font-black text-cyan-600">
+                    ₦{s.estimatedCommission?.toLocaleString() || '0'}
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
+      )}
 
-        {/* AI Market Intel Section */}
-        <div className="bg-navy-900 p-8 rounded-2xl shadow-xl text-white flex flex-col relative overflow-hidden">
-          <div className="absolute top-0 right-0 p-4 opacity-10">
-             <Sparkles size={120} />
-          </div>
+      {/* AI Intel Card */}
+      <div className="bg-navy-900 p-6 md:p-10 rounded-3xl shadow-xl text-white relative overflow-hidden">
+        <div className="relative z-10">
           <div className="flex items-center justify-between mb-6">
-            <h3 className="text-lg font-bold flex items-center gap-2">
-              <Sparkles className="text-cyan-400" size={20} />
-              AI Market Intel
-            </h3>
-            <button 
-              onClick={fetchIntel} 
-              disabled={loadingIntel}
-              className="p-2 hover:bg-white/10 rounded-full transition-colors disabled:opacity-50"
-            >
-              <RefreshCw size={16} className={loadingIntel ? 'animate-spin' : ''} />
+            <h3 className="text-lg font-black flex items-center gap-2 uppercase tracking-tight"><Sparkles className="text-cyan-400" /> AI Market Intelligence</h3>
+            <button onClick={fetchIntel} disabled={loadingIntel} className="p-2 bg-white/10 rounded-xl hover:bg-white/20 transition-all">
+              <RefreshCw size={14} className={loadingIntel ? 'animate-spin' : ''} />
             </button>
           </div>
-          
-          <div className="flex-1 text-sm text-navy-100 leading-relaxed overflow-y-auto max-h-60 custom-scrollbar pr-2">
+          <div className="text-xs md:text-sm text-navy-100 leading-relaxed font-medium max-w-2xl">
             {loadingIntel ? (
-              <div className="space-y-4">
-                <div className="h-4 bg-white/10 rounded animate-pulse w-3/4" />
-                <div className="h-4 bg-white/10 rounded animate-pulse w-full" />
-                <div className="h-4 bg-white/10 rounded animate-pulse w-5/6" />
+              <div className="flex items-center gap-3 py-4">
+                <div className="w-4 h-4 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
+                <span>Synchronizing with latest Nigerian Prop-Tech data...</span>
               </div>
-            ) : (
-              <>
-                <p>{marketIntel?.text || "Scanning Nigerian real estate news..."}</p>
-                {marketIntel?.sources && marketIntel.sources.length > 0 && (
-                  <div className="mt-6 pt-4 border-t border-white/10">
-                    <p className="text-[10px] font-bold text-cyan-400 uppercase tracking-widest mb-2">Grounding Sources</p>
-                    {marketIntel.sources.map((src, idx) => (
-                      <a 
-                        key={idx} 
-                        href={src.uri} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-2 text-[10px] text-navy-200 hover:text-white mb-1 transition-colors"
-                      >
-                        <ExternalLink size={10} /> {src.title}
-                      </a>
-                    ))}
-                  </div>
-                )}
-              </>
-            )}
+            ) : marketIntel?.text}
           </div>
+          {!loadingIntel && marketIntel?.sources && marketIntel.sources.length > 0 && (
+            <div className="mt-6 flex flex-wrap gap-2">
+              {marketIntel.sources.map((s, i) => (
+                <a key={i} href={s.uri} target="_blank" rel="noopener noreferrer" className="text-[10px] bg-white/10 hover:bg-white/20 px-3 py-1 rounded-full flex items-center gap-1 transition-all">
+                  <ChevronRight size={10} /> {s.title}
+                </a>
+              ))}
+            </div>
+          )}
         </div>
+        {/* Abstract Background Element */}
+        <div className="absolute -right-20 -bottom-20 w-64 h-64 bg-cyan-400/10 rounded-full blur-3xl pointer-events-none" />
       </div>
     </div>
   );
+};
+
+const StatCard = ({ icon, title, value, subtitle, color }: any) => (
+  <div className={`p-5 md:p-6 rounded-3xl shadow-sm border border-gray-100 ${color === 'navy' ? 'bg-navy-900 text-white' : 'bg-white text-navy-900'}`}>
+    <div className="mb-4">{icon}</div>
+    <p className={`text-[10px] font-black uppercase tracking-widest ${color === 'navy' ? 'text-navy-300' : 'text-gray-400'}`}>{title}</p>
+    <p className="text-2xl md:text-3xl font-black mt-1">{value}</p>
+    <p className={`text-[10px] font-bold mt-3 ${color === 'navy' ? 'text-cyan-400' : 'text-gray-400'}`}>{subtitle}</p>
+  </div>
+);
+
+const StatusBadge = ({ status }: { status: string }) => {
+  const styles: any = {
+    PENDING: 'bg-orange-50 text-orange-600 border-orange-100',
+    APPROVED: 'bg-cyan-50 text-cyan-600 border-cyan-100',
+    PAID: 'bg-emerald-50 text-emerald-600 border-emerald-100',
+    REJECTED: 'bg-red-50 text-red-600 border-red-100'
+  };
+  return <span className={`px-2 py-1 rounded-full text-[9px] font-black uppercase border shrink-0 ${styles[status]}`}>{status}</span>;
 };

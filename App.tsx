@@ -7,83 +7,51 @@ import { Layout } from './components/Layout';
 import { Dashboard } from './components/Dashboard';
 import { DriveForm } from './components/DriveForm';
 import { AdminPortal } from './components/AdminPortal';
-import { Loader2, Database, AlertCircle, RefreshCw, LogOut, WifiOff, CheckCircle2 } from 'lucide-react';
+import { ProfileView } from './components/ProfileView';
+import { Loader2, Database, AlertCircle, RefreshCw } from 'lucide-react';
 
 const App: React.FC = () => {
   const [session, setSession] = useState<any>(null);
   const [user, setUser] = useState<User | null>(null);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'form' | 'admin'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'form' | 'admin' | 'profile'>('dashboard');
   const [submissions, setSubmissions] = useState<DriveSubmission[]>([]);
   const [loading, setLoading] = useState(true);
-  const [appError, setAppError] = useState<string | null>(null);
+  const [profileError, setProfileError] = useState(false);
 
   useEffect(() => {
-    if (!isConfigured) {
-      setLoading(false);
-      return;
-    }
-
+    if (!isConfigured) { setLoading(false); return; }
     const initApp = async () => {
       try {
         const { data: { session: currentSession } } = await supabase!.auth.getSession();
         setSession(currentSession);
-        if (currentSession) {
-          await fetchUserData(currentSession.user.id);
-        } else {
-          setLoading(false);
-        }
-      } catch (err: any) {
-        console.error("Initialization error:", err);
-        setAppError("Connection Error: " + (err.message || "Failed to reach database terminal."));
-        setLoading(false);
-      }
+        if (currentSession) await fetchUserData(currentSession.user.id);
+        else setLoading(false);
+      } catch (err) { setLoading(false); }
     };
-
     initApp();
-
     const { data: { subscription } } = supabase!.auth.onAuthStateChange((_event, session) => {
       setSession(session);
-      if (session) {
-        fetchUserData(session.user.id);
-      } else {
-        setUser(null);
-        setLoading(false);
-        setAppError(null);
-      }
+      if (session) fetchUserData(session.user.id);
+      else { setUser(null); setLoading(false); }
     });
-
     return () => subscription.unsubscribe();
   }, []);
 
   const fetchUserData = async (userId: string) => {
     setLoading(true);
-    setAppError(null);
+    setProfileError(false);
     try {
       const profile = await SupabaseService.getProfile(userId);
       setUser(profile);
       const subs = await SupabaseService.getSubmissions(profile.role, userId);
       setSubmissions(subs);
-    } catch (err: any) {
-      setAppError(err?.message || "Profile sync failure.");
-    } finally {
-      setLoading(false);
+    } catch (err: any) { 
+      console.error(err);
+      if (err.message === "PROFILE_MISSING") {
+        setProfileError(true);
+      }
     }
-  };
-
-  const handleLogout = async () => {
-    if (!supabase) return;
-    try { await supabase.auth.signOut(); } catch (e) {}
-    setUser(null);
-    setSession(null);
-    setAppError(null);
-  };
-
-  const handleReportDrive = async (data: any) => {
-    if (!user) return;
-    try {
-      const newSub = await SupabaseService.createSubmission({ ...data, agentId: user.id, agentName: user.fullName, estimatedCommission: data.noOfUnits * 450 });
-      setSubmissions(prev => [newSub, ...prev]);
-    } catch (err: any) { throw err; }
+    finally { setLoading(false); }
   };
 
   const handleUpdateStatus = async (id: string, status: SubmissionStatus, verification?: VerificationResult) => {
@@ -93,81 +61,33 @@ const App: React.FC = () => {
     } catch (err: any) { alert(err.message); }
   };
 
-  // If credentials seem totally missing (usually during first setup)
-  if (!isConfigured && !appError) {
-    return (
-      <div className="min-h-screen bg-navy-900 flex items-center justify-center p-6 text-white text-center">
-        <div className="max-w-md w-full bg-navy-800 p-8 rounded-3xl border border-navy-700 shadow-2xl">
-          <Database size={48} className="mx-auto mb-6 text-cyan-400" />
-          <h1 className="text-2xl font-bold mb-4 tracking-tight">Vercel Configuration Required</h1>
-          <p className="text-navy-200 mb-8 text-sm leading-relaxed">
-            The database connection is not yet configured in your Vercel Environment Variables.
-            <br/><br/>
-            Ensure <code>SUPABASE_URL</code> and <code>SUPABASE_ANON_KEY</code> are set in Vercel.
-          </p>
-          <button 
-            onClick={() => window.location.reload()} 
-            className="w-full bg-cyan-400 text-navy-900 py-4 rounded-xl font-bold uppercase text-xs tracking-widest hover:bg-cyan-300 transition-all"
-          >
-            Refresh Connection
-          </button>
-        </div>
-      </div>
-    );
-  }
+  if (!isConfigured) return <div className="min-h-screen bg-navy-900 text-white flex items-center justify-center p-8 text-center"><Database size={48}/><h1 className="mt-4 font-black">Missing Credentials</h1></div>;
+  
+  if (loading) return <div className="min-h-screen bg-navy-900 flex flex-col items-center justify-center"><Loader2 className="animate-spin text-cyan-400" size={48} /><p className="text-white text-[10px] font-black uppercase mt-4">Syncing GoAgentHQ...</p></div>;
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-navy-900 flex flex-col items-center justify-center">
-        <Loader2 className="animate-spin text-cyan-400 mb-4" size={48} />
-        <p className="text-white text-xs font-bold uppercase tracking-widest">Connecting to GoAgent HQ...</p>
-      </div>
-    );
-  }
-
-  if (appError && !user) {
-    const isNetworkError = appError.toLowerCase().includes('fetch') || appError.toLowerCase().includes('network');
-    
+  // Recovery UI for missing profiles
+  if (profileError && session) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
-        <div className="max-w-xl w-full bg-white p-10 rounded-3xl shadow-xl border-t-8 border-red-500">
-          <div className="flex items-center gap-4 text-red-600 mb-6">
-            {isNetworkError ? <WifiOff size={40} /> : <AlertCircle size={40} />}
-            <h2 className="text-2xl font-black">{isNetworkError ? "Connection Failed" : "Sync Failure"}</h2>
-          </div>
-          <p className="text-gray-600 mb-8 leading-relaxed font-medium">
-            {appError}
+        <div className="max-w-md w-full bg-white p-8 rounded-3xl shadow-2xl border-t-8 border-navy-900 text-center">
+          <AlertCircle size={48} className="mx-auto text-orange-500 mb-6" />
+          <h2 className="text-2xl font-black text-navy-900 uppercase tracking-tight mb-4">Profile Synchronization Issue</h2>
+          <p className="text-sm text-gray-500 mb-8 leading-relaxed">
+            We found your login account, but your agent identity profile is missing. This usually happens after a system migration.
           </p>
-          
-          <div className="bg-gray-50 p-6 rounded-2xl mb-8 space-y-4 border border-gray-100">
-            <h3 className="text-xs font-black text-navy-900 uppercase tracking-widest flex items-center gap-2">
-              <CheckCircle2 size={14} className="text-emerald-500" /> Troubleshooting Checklist
-            </h3>
-            <ul className="text-xs text-gray-500 space-y-3">
-              <li className="flex gap-3">
-                <span className="w-4 h-4 rounded-full bg-navy-900 text-white flex-shrink-0 flex items-center justify-center text-[10px]">1</span>
-                <span><strong>Check Internet:</strong> Ensure you have a stable data connection.</span>
-              </li>
-              <li className="flex gap-3">
-                <span className="w-4 h-4 rounded-full bg-navy-900 text-white flex-shrink-0 flex items-center justify-center text-[10px]">2</span>
-                <span><strong>Vercel Env Vars:</strong> Ensure you added the keys in Vercel Settings and <strong>Redeployed</strong>.</span>
-              </li>
-              <li className="flex gap-3">
-                <span className="w-4 h-4 rounded-full bg-navy-900 text-white flex-shrink-0 flex items-center justify-center text-[10px]">3</span>
-                <span><strong>Project Status:</strong> Check Supabase dashboard to ensure project isn't "Paused".</span>
-              </li>
-            </ul>
-          </div>
-
-          <div className="flex flex-col gap-3">
-            <button onClick={() => window.location.reload()} className="w-full bg-navy-900 text-white py-4 rounded-xl font-bold flex items-center justify-center gap-2">
-              <RefreshCw size={18} /> Retry Full Boot
-            </button>
-            {session && (
-              <button onClick={handleLogout} className="w-full bg-gray-100 text-gray-500 py-4 rounded-xl font-bold flex items-center justify-center gap-2">
-                <LogOut size={18} /> Sign Out & Reset
-              </button>
-            )}
+          <div className="space-y-4">
+             <button 
+               onClick={() => supabase?.auth.signOut().then(() => setProfileError(false))}
+               className="w-full py-4 bg-navy-900 text-white rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-navy-800"
+             >
+               Return to Login / Registration
+             </button>
+             <button 
+               onClick={() => fetchUserData(session.user.id)}
+               className="w-full py-4 border-2 border-gray-100 text-gray-400 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-gray-50 flex items-center justify-center gap-2"
+             >
+               <RefreshCw size={14} /> Retry Sync
+             </button>
           </div>
         </div>
       </div>
@@ -175,13 +95,15 @@ const App: React.FC = () => {
   }
 
   if (!session || !user) return <Auth onLogin={() => {}} />;
-  if (!user.agreementSigned) return <AgreementWall onSign={() => SupabaseService.signAgreement(user.id, 'Logged').then(() => fetchUserData(user.id))} />;
+  
+  if (!user.agreementSigned) return <AgreementWall onSign={() => SupabaseService.signAgreement(user.id, '127.0.0.1').then(() => fetchUserData(user.id))} />;
 
   return (
-    <Layout user={user} activeTab={activeTab} setActiveTab={setActiveTab} onLogout={handleLogout}>
+    <Layout user={user} activeTab={activeTab} setActiveTab={setActiveTab} onLogout={() => supabase?.auth.signOut()}>
       {activeTab === 'dashboard' && <Dashboard user={user} submissions={submissions} />}
-      {activeTab === 'form' && <DriveForm user={user} onSubmit={handleReportDrive} />}
+      {activeTab === 'form' && <DriveForm user={user} onSubmit={data => SupabaseService.createSubmission({ ...data, agentId: user.id, agentName: user.fullName, estimatedCommission: data.noOfUnits * 450 }).then(n => setSubmissions(p => [n, ...p]))} />}
       {activeTab === 'admin' && user.role === 'ADMIN' && <AdminPortal submissions={submissions} onUpdateStatus={handleUpdateStatus} />}
+      {activeTab === 'profile' && <ProfileView user={user} onUpdate={(updates) => SupabaseService.updateProfile(user.id, updates).then(() => fetchUserData(user.id))} />}
     </Layout>
   );
 };

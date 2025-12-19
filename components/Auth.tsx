@@ -1,61 +1,137 @@
 
-import React, { useState } from 'react';
-import { User } from '../types';
-import { SupabaseService } from '../services/supabaseService';
-import { Loader2, ShieldCheck, Info, AlertCircle, Lock, RefreshCw } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { SupabaseService, supabase } from '../services/supabaseService';
+import { AlertCircle, RefreshCw, UserPlus, LogIn, Info, KeyRound, ArrowLeft, CheckCircle2, ShieldCheck, Lock } from 'lucide-react';
+
+const NIGERIAN_STATES = [
+  "Abia", "Adamawa", "Akwa Ibom", "Anambra", "Bauchi", "Bayelsa", "Benue", "Borno", 
+  "Cross River", "Delta", "Ebonyi", "Edo", "Ekiti", "Enugu", "FCT - Abuja", "Gombe", 
+  "Imo", "Jigawa", "Kaduna", "Kano", "Katsina", "Kebbi", "Kogi", "Kwara", "Lagos", 
+  "Nasarawa", "Niger", "Ogun", "Ondo", "Osun", "Oyo", "Plateau", "Rivers", "Sokoto", 
+  "Taraba", "Yobe", "Zamfara"
+];
 
 interface AuthProps {
   onLogin: () => void;
 }
 
+type AuthView = 'LOGIN' | 'REGISTER' | 'RESET' | 'NEW_PASSWORD';
+
 export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
-  const [isRegistering, setIsRegistering] = useState(false);
+  const [view, setView] = useState<AuthView>('LOGIN');
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [showAdminCode, setShowAdminCode] = useState(false);
+  const [error, setError] = useState<React.ReactNode | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
   
-  // Form States
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [phone, setPhone] = useState('');
-  const [bankName, setBankName] = useState('');
-  const [accountNumber, setAccountNumber] = useState('');
-  const [accountName, setAccountName] = useState('');
+  const [state, setState] = useState('');
   const [adminCode, setAdminCode] = useState('');
 
-  const ADMIN_SECRET = "ESTATEGO_ADMIN_2025";
+  // Automatically detect recovery links in URL
+  useEffect(() => {
+    const hash = window.location.hash;
+    if (hash && hash.includes('type=recovery')) {
+      setView('NEW_PASSWORD');
+    }
+
+    if (supabase) {
+      const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+        if (event === 'PASSWORD_RECOVERY') {
+          setView('NEW_PASSWORD');
+        }
+      });
+      return () => subscription.unsubscribe();
+    }
+  }, []);
+
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+    try {
+      await SupabaseService.resetPassword(email);
+      setSuccessMsg("Terminal Recovery Link Sent! Please check your email to set your new password.");
+      setTimeout(() => setView('LOGIN'), 5000);
+    } catch (err: any) {
+      setError(err.message || "Unable to trigger recovery.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUpdatePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (password !== confirmPassword) {
+      setError("Passwords do not match.");
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      await SupabaseService.updateUserPassword(password);
+      setSuccessMsg("Password updated successfully! Redirecting to login...");
+      setTimeout(() => {
+        setView('LOGIN');
+        setSuccessMsg(null);
+      }, 3000);
+    } catch (err: any) {
+      setError(err.message || "Unable to update password.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
+    setSuccessMsg(null);
+    
     try {
-      if (isRegistering) {
-        const role = adminCode === ADMIN_SECRET ? 'ADMIN' : 'AGENT';
-        await SupabaseService.signUp(email, fullName, phone, { bankName, accountNumber, accountName }, role);
-        alert("Account created successfully! You can now sign in.");
-        setIsRegistering(false);
+      if (view === 'REGISTER') {
+        const role = adminCode === "ESTATEGO_ADMIN_2025" ? 'ADMIN' : 'AGENT';
+        await SupabaseService.signUp(email, password, fullName, phone, state, null, role);
+        setSuccessMsg("Terminal Identity Established! You can now access your dashboard.");
+        setTimeout(() => {
+          setView('LOGIN');
+          setSuccessMsg(null);
+        }, 3000);
       } else {
-        // Attempt Sign In
-        try {
-          await SupabaseService.signIn(email);
-          onLogin();
-        } catch (signInErr: any) {
-          if (signInErr.message?.includes("Invalid login credentials") || signInErr.status === 400) {
-            setError("Invalid email or password. If you just registered, ensure your email is correct. Default internal password is being used.");
-          } else {
-            throw signInErr;
-          }
-        }
+        await SupabaseService.signIn(email, password);
+        onLogin();
       }
     } catch (err: any) {
-      console.error("Auth Error:", err);
-      if (err.message?.includes("already registered") || err.code === "23505") {
-        setError("This email is already registered. Please sign in instead.");
-      } else if (err.message?.includes("rate limit")) {
-        setError("Too many attempts. Please wait a few minutes.");
+      if (err.message === "EXISTS_IN_AUTH") {
+        setError(
+          <div className="flex flex-col gap-3 p-1">
+            <div className="flex items-center gap-2 text-red-800 font-black uppercase text-[10px]">
+              <AlertCircle size={14} /> Identity Already Secured
+            </div>
+            <p className="text-[11px] text-red-700 leading-tight font-medium">This email is already registered. If you forgot your password, please use the recovery flow.</p>
+            <div className="flex gap-2">
+              <button 
+                type="button"
+                onClick={() => { setView('LOGIN'); setError(null); }}
+                className="bg-navy-900 text-white px-4 py-2 rounded-xl font-black uppercase text-[9px] hover:bg-navy-800 transition-all flex items-center gap-2 shadow-lg"
+              >
+                <LogIn size={10} /> Sign In
+              </button>
+              <button 
+                type="button"
+                onClick={() => { setView('RESET'); setError(null); }}
+                className="bg-white border border-red-200 text-red-600 px-4 py-2 rounded-xl font-black uppercase text-[9px] hover:bg-red-50 transition-all flex items-center gap-2"
+              >
+                <KeyRound size={10} /> Reset Password
+              </button>
+            </div>
+          </div>
+        );
       } else {
-        setError(err.message || "An authentication error occurred.");
+        setError(err.message || "Terminal authentication error. Please verify credentials.");
       }
     } finally {
       setLoading(false);
@@ -63,207 +139,186 @@ export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
-      <div className="sm:mx-auto sm:w-full sm:max-w-md">
-        <img
-          className="mx-auto h-16 w-auto"
-          src="https://estatego.app/asset/images/logo.png"
-          alt="EstateGO"
-        />
-        <h2 className="mt-6 text-center text-3xl font-extrabold text-navy-900 uppercase tracking-tighter">
-          {isRegistering ? 'Growth Team Signup' : 'GoAgent Terminal'}
+    <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8">
+      <div className="sm:mx-auto sm:w-full sm:max-w-md text-center">
+        <img className="mx-auto h-16 w-auto mb-6" src="https://estatego.app/asset/images/logo.png" alt="EstateGO" />
+        <h2 className="text-3xl font-black text-navy-900 uppercase tracking-tighter italic">
+          {view === 'REGISTER' ? 'Terminal Onboarding' : view === 'RESET' ? 'Identity Recovery' : view === 'NEW_PASSWORD' ? 'Update Credentials' : 'GoAgent Access'}
         </h2>
-        <p className="mt-2 text-center text-sm text-gray-600">
-          {isRegistering ? 'Already part of the team? ' : 'New Field Agent? '}
-          <button
-            onClick={() => {
-              setIsRegistering(!isRegistering);
-              setError(null);
-            }}
-            className="font-bold text-cyan-600 hover:text-cyan-500 underline decoration-2 underline-offset-4"
-          >
-            {isRegistering ? 'Login here' : 'Register now'}
-          </button>
-        </p>
+        
+        {view !== 'RESET' && view !== 'NEW_PASSWORD' && (
+          <div className="mt-4 inline-block p-1 bg-white rounded-2xl shadow-sm border border-gray-100">
+             <div className="flex items-center gap-1">
+                <button 
+                  onClick={() => { setView('LOGIN'); setError(null); setSuccessMsg(null); }}
+                  className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${view === 'LOGIN' ? 'bg-navy-900 text-white shadow-md' : 'text-gray-400 hover:text-navy-900'}`}
+                >
+                  Sign In
+                </button>
+                <button 
+                  onClick={() => { setView('REGISTER'); setError(null); setSuccessMsg(null); }}
+                  className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center gap-2 ${view === 'REGISTER' ? 'bg-cyan-400 text-navy-900 shadow-md' : 'text-gray-400 hover:text-navy-900'}`}
+                >
+                  Register
+                </button>
+             </div>
+          </div>
+        )}
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="bg-white py-8 px-4 shadow-2xl sm:rounded-3xl sm:px-10 border-b-8 border-navy-900">
+        <div className="bg-white py-10 px-6 shadow-2xl rounded-3xl border-b-[12px] border-navy-900">
+          
+          {successMsg && (
+            <div className="mb-6 p-4 bg-emerald-50 border border-emerald-100 text-emerald-800 text-xs rounded-xl flex items-center gap-3 animate-in zoom-in">
+              <CheckCircle2 size={18} className="shrink-0" />
+              <p className="font-bold uppercase tracking-tight leading-tight">{successMsg}</p>
+            </div>
+          )}
+
           {error && (
-            <div className="mb-6 p-4 bg-red-50 border-l-4 border-red-500 text-red-700 text-xs flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
-              <AlertCircle size={16} className="shrink-0 mt-0.5" />
-              <div>
-                <p className="font-bold">Authentication Failed</p>
-                <p className="mt-1">{error}</p>
-              </div>
+            <div className="mb-6 p-4 bg-red-50 border-l-4 border-red-500 text-red-700 text-xs rounded-lg shadow-sm">
+              {error}
             </div>
           )}
           
-          <form className="space-y-5" onSubmit={handleSubmit}>
-            {isRegistering && (
-              <div className="animate-in fade-in slide-in-from-left-4 duration-300">
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-1">Full Name</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="John Doe"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  className="block w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:ring-2 focus:ring-navy-900 outline-none transition-all"
-                />
+          {view === 'RESET' ? (
+            <form className="space-y-5" onSubmit={handleResetPassword}>
+              <div>
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Registered Agent Email</label>
+                <input type="email" required value={email} onChange={e => setEmail(e.target.value)} className="block w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 outline-none focus:bg-white focus:ring-2 focus:ring-cyan-400 transition-all font-medium text-navy-900" placeholder="agent@estatego.app" />
               </div>
-            )}
-
-            <div>
-              <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-1">Email Address</label>
-              <input
-                type="email"
-                required
-                placeholder="agent@estatego.app"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="block w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:ring-2 focus:ring-navy-900 outline-none transition-all"
-              />
-            </div>
-
-            {isRegistering && (
-              <div className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-300">
-                <div>
-                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-1">Phone Number</label>
-                  <input
-                    type="tel"
-                    required
-                    placeholder="080 0000 0000"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    className="block w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:ring-2 focus:ring-navy-900 outline-none transition-all"
-                  />
-                </div>
-
-                <div className="pt-2">
-                  <div className="flex justify-between items-center mb-2">
-                    <h3 className="text-xs font-black text-navy-900 uppercase">Payout Destination</h3>
-                    <button 
-                      type="button" 
-                      onClick={() => setShowAdminCode(!showAdminCode)}
-                      className="text-[10px] font-bold text-gray-400 hover:text-navy-900 flex items-center gap-1 uppercase"
-                    >
-                      <Lock size={10} /> Admin Key
-                    </button>
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full flex justify-center items-center gap-2 py-4 px-4 rounded-2xl shadow-xl text-sm font-black text-navy-900 bg-cyan-400 hover:bg-cyan-300 disabled:opacity-50 transition-all uppercase tracking-widest"
+              >
+                {loading ? <RefreshCw className="animate-spin" /> : <><KeyRound size={18}/> Send Recovery Link</>}
+              </button>
+              <button type="button" onClick={() => setView('LOGIN')} className="w-full flex items-center justify-center gap-2 text-[10px] font-black uppercase text-gray-400 hover:text-navy-900 transition-colors pt-2">
+                <ArrowLeft size={14}/> Back to Login
+              </button>
+            </form>
+          ) : view === 'NEW_PASSWORD' ? (
+            <form className="space-y-5" onSubmit={handleUpdatePassword}>
+              <div className="p-4 bg-navy-50 rounded-xl border border-navy-100 mb-4">
+                <p className="text-[10px] font-bold text-navy-800 uppercase leading-tight">Secure session established. Please set your new terminal password below.</p>
+              </div>
+              <div>
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">New Password</label>
+                <input type="password" required value={password} onChange={e => setPassword(e.target.value)} className="block w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 outline-none focus:bg-white focus:ring-2 focus:ring-cyan-400 transition-all font-medium text-navy-900" placeholder="••••••••" />
+              </div>
+              <div>
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Confirm New Password</label>
+                <input type="password" required value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} className="block w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 outline-none focus:bg-white focus:ring-2 focus:ring-cyan-400 transition-all font-medium text-navy-900" placeholder="••••••••" />
+              </div>
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full flex justify-center items-center gap-2 py-4 px-4 rounded-2xl shadow-xl text-sm font-black text-navy-900 bg-cyan-400 hover:bg-cyan-300 disabled:opacity-50 transition-all uppercase tracking-widest"
+              >
+                {loading ? <RefreshCw className="animate-spin" /> : <><Lock size={18}/> Update Password</>}
+              </button>
+            </form>
+          ) : (
+            <form className="space-y-5" onSubmit={handleSubmit}>
+              {view === 'REGISTER' && (
+                <>
+                  <div>
+                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Full Identity</label>
+                    <input type="text" required value={fullName} onChange={e => setFullName(e.target.value)} className="block w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 outline-none focus:bg-white focus:ring-2 focus:ring-cyan-400 transition-all font-medium text-navy-900" placeholder="John Doe" />
                   </div>
-                  
-                  {showAdminCode && (
-                    <div className="mb-4 p-3 bg-navy-900 rounded-xl animate-in zoom-in duration-200">
-                      <input
-                        type="password"
-                        placeholder="Secret Invitation Code"
-                        value={adminCode}
-                        onChange={(e) => setAdminCode(e.target.value)}
-                        className="block w-full px-3 py-2 bg-navy-800 border border-navy-700 text-cyan-400 text-sm rounded-lg outline-none"
-                      />
-                    </div>
-                  )}
+                  <div>
+                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Ops Base (State)</label>
+                    <select required value={state} onChange={e => setState(e.target.value)} className="block w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 outline-none focus:bg-white focus:ring-2 focus:ring-cyan-400 transition-all font-medium text-navy-900">
+                      <option value="">Select State</option>
+                      {NIGERIAN_STATES.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </div>
+                </>
+              )}
 
-                  <div className="space-y-3">
-                    <input
-                      type="text"
-                      placeholder="Bank Name"
-                      required
-                      value={bankName}
-                      onChange={(e) => setBankName(e.target.value)}
-                      className="block w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 text-sm outline-none"
-                    />
-                    <div className="grid grid-cols-2 gap-3">
-                      <input
-                        type="text"
-                        placeholder="Acc. Number"
-                        required
-                        value={accountNumber}
-                        onChange={(e) => setAccountNumber(e.target.value)}
-                        className="block w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 text-sm outline-none"
-                      />
-                      <input
-                        type="text"
-                        placeholder="Acc. Name"
-                        required
-                        value={accountName}
-                        onChange={(e) => setAccountName(e.target.value)}
-                        className="block w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 text-sm outline-none"
-                      />
-                    </div>
+              <div>
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Agent Email</label>
+                <input type="email" required value={email} onChange={e => setEmail(e.target.value)} className="block w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 outline-none focus:bg-white focus:ring-2 focus:ring-cyan-400 transition-all font-medium text-navy-900" placeholder="agent@estatego.app" />
+              </div>
+
+              <div>
+                <div className="flex justify-between items-center mb-1">
+                   <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest">Terminal Password</label>
+                   {view === 'LOGIN' && (
+                     <button type="button" onClick={() => setView('RESET')} className="text-[10px] font-black text-cyan-600 hover:text-cyan-500 uppercase tracking-widest">Forgot Password</button>
+                   )}
+                </div>
+                <input type="password" required value={password} onChange={e => setPassword(e.target.value)} className="block w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 outline-none focus:bg-white focus:ring-2 focus:ring-cyan-400 transition-all font-medium text-navy-900" placeholder="••••••••" />
+              </div>
+
+              {view === 'REGISTER' && (
+                <div className="space-y-5">
+                  <div>
+                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Contact Phone</label>
+                    <input type="tel" required value={phone} onChange={e => setPhone(e.target.value)} className="block w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 outline-none focus:bg-white focus:ring-2 focus:ring-cyan-400 transition-all font-medium text-navy-900" placeholder="080..." />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Ops Code</label>
+                    <input type="password" value={adminCode} onChange={e => setAdminCode(e.target.value)} className="block w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 outline-none focus:bg-white focus:ring-2 focus:ring-cyan-400 transition-all font-medium text-navy-900" placeholder="Admin Override Only" />
                   </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            {!isRegistering && (
-               <div className="p-4 bg-cyan-50 border border-cyan-100 rounded-2xl text-[10px] text-cyan-800 leading-relaxed font-bold uppercase tracking-tight">
-                 <p>EstateGO Internal Security: System-generated passwords apply to all field agent terminals.</p>
-               </div>
-            )}
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full flex justify-center items-center gap-2 py-4 px-4 border border-transparent rounded-2xl shadow-lg text-sm font-black text-navy-900 bg-cyan-400 hover:bg-cyan-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-cyan-500 disabled:opacity-50 transition-all uppercase tracking-widest"
-            >
-              {loading ? <RefreshCw className="animate-spin h-5 w-5" /> : (isRegistering ? 'Initialize Agent Account' : 'Authenticate')}
-            </button>
-          </form>
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full flex justify-center items-center gap-2 py-4 px-4 rounded-2xl shadow-xl text-sm font-black text-navy-900 bg-cyan-400 hover:bg-cyan-300 disabled:opacity-50 transition-all uppercase tracking-widest"
+              >
+                {loading ? <RefreshCw className="animate-spin" /> : (view === 'REGISTER' ? <><UserPlus size={18}/> Initiate Setup</> : <><LogIn size={18}/> Access Terminal</>)}
+              </button>
+            </form>
+          )}
         </div>
       </div>
     </div>
   );
 };
 
-interface AgreementProps {
-  onSign: () => void;
-}
-
-export const AgreementWall: React.FC<AgreementProps> = ({ onSign }) => {
-  const [signing, setSigning] = useState(false);
+export const AgreementWall: React.FC<{ onSign: () => void }> = ({ onSign }) => {
+  const [loading, setLoading] = useState(false);
 
   const handleSign = async () => {
-    setSigning(true);
-    try {
-      await onSign();
-    } catch (err) {
-      console.error(err);
-      alert("Error signing agreement. Please try again.");
-    } finally {
-      setSigning(false);
-    }
+    setLoading(true);
+    await onSign();
+    setLoading(false);
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
-      <div className="fixed inset-0 bg-navy-900 bg-opacity-95 backdrop-blur-sm transition-opacity"></div>
-      <div className="relative bg-white rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl animate-in zoom-in duration-300">
-        <div className="bg-navy-900 p-8 text-center border-b border-navy-800">
-          <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-cyan-400 mb-4">
-            <ShieldCheck className="h-8 w-8 text-navy-900" />
+    <div className="min-h-screen bg-navy-900 flex items-center justify-center p-6">
+      <div className="max-w-2xl w-full bg-white rounded-3xl shadow-2xl overflow-hidden flex flex-col">
+        <div className="p-8 md:p-12 border-b border-gray-100 bg-gray-50">
+          <div className="flex items-center gap-3 mb-6">
+            <ShieldCheck size={32} className="text-cyan-500" />
+            <h2 className="text-2xl font-black text-navy-900 uppercase italic tracking-tighter">Service Agreement // v2025.1</h2>
           </div>
-          <h3 className="text-2xl font-black text-white uppercase tracking-tighter">
-            Field Operations Agreement
-          </h3>
+          <div className="prose prose-sm max-h-64 overflow-y-auto pr-4 text-gray-600 font-medium leading-relaxed">
+            <p className="mb-4">This GoAgent Field Operations Agreement ("Agreement") is entered into by and between EstateGO ("Company") and the undersigned Agent.</p>
+            <h4 className="text-navy-900 font-bold uppercase text-[10px] tracking-widest mb-2">1. Scope of Engagement</h4>
+            <p className="mb-4">The Agent is engaged to identify and report high-occupancy residential and commercial property leads within the assigned territory. Reports must include accurate GPS data and visual evidence of site visitation.</p>
+            <h4 className="text-navy-900 font-bold uppercase text-[10px] tracking-widest mb-2">2. Payout Structure</h4>
+            <p className="mb-4">Commissions are calculated at ₦450 per verified residential unit. Payments are disbursed via the payout subsystem upon verification by the Admin Portal and confirmation of data authenticity.</p>
+            <h4 className="text-navy-900 font-bold uppercase text-[10px] tracking-widest mb-2">3. Ethical Conduct</h4>
+            <p className="mb-4">Agents must conduct themselves professionally. Fabrication of site visits or data will result in immediate terminal deactivation and forfeiture of pending commissions.</p>
+          </div>
         </div>
-        
-        <div className="p-8">
-          <div className="h-80 overflow-y-auto border border-gray-100 p-6 rounded-2xl bg-gray-50 text-sm text-gray-700 space-y-4 leading-relaxed custom-scrollbar">
-            <p><strong className="text-navy-900">1. SCOPE OF SERVICES:</strong> The Agent is engaged as an independent contractor to onboard residential and commercial properties to the EstateGO platform.</p>
-            <p><strong className="text-navy-900">2. COMMISSION:</strong> A commission of <span className="text-cyan-600 font-bold">N450 per resident/month</span> will be paid for every successfully onboarded and paying unit via the GoAgent platform.</p>
-            <p><strong className="text-navy-900">3. DATA INTEGRITY:</strong> All drives must include GPS coordinates and real property photos. Fraudulent entries will result in immediate termination and loss of accrued commissions.</p>
-            <p><strong className="text-navy-900">4. PAYMENT CYCLE:</strong> Commissions are disbursed on the 7th of every month following successful client payment reconciliation.</p>
-            <p><strong className="text-navy-900">5. DIGITAL SIGNATURE:</strong> Acceptance of these terms is logged with your Auth ID, Timestamp, and IP Address as a legally binding digital contract.</p>
+        <div className="p-8 md:p-12 bg-white flex flex-col md:flex-row items-center justify-between gap-6">
+          <div className="text-center md:text-left">
+            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Digital Timestamp Execution</p>
+            <p className="text-xs font-bold text-navy-900">{new Date().toLocaleDateString()} // SECURE_NODE_102</p>
           </div>
-          
-          <button
-            type="button"
-            onClick={handleSign}
-            disabled={signing}
-            className="mt-8 w-full rounded-2xl py-4 bg-navy-900 text-white font-black hover:bg-navy-800 transition-all uppercase tracking-widest shadow-xl flex justify-center items-center gap-2"
+          <button 
+            onClick={handleSign} 
+            disabled={loading}
+            className="w-full md:w-auto px-10 py-4 bg-navy-900 text-white rounded-2xl font-black uppercase tracking-widest shadow-xl hover:bg-navy-800 transition-all flex items-center justify-center gap-2"
           >
-            {signing ? <Loader2 className="animate-spin h-5 w-5" /> : 'I Bind My Signature to This Agreement'}
+            {loading ? <RefreshCw className="animate-spin" size={18} /> : <>Accept & Establish Identity</>}
           </button>
         </div>
       </div>

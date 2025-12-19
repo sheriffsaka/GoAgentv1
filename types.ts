@@ -6,6 +6,7 @@ export interface User {
   fullName: string;
   email: string;
   phone: string;
+  state: string;
   role: UserRole;
   bankDetails?: {
     bankName: string;
@@ -16,16 +17,17 @@ export interface User {
   agreementTimestamp?: string;
   agreementIp?: string;
   createdAt?: string;
-  lastActive?: string;
 }
 
-export type SubmissionStatus = 'PENDING' | 'APPROVED' | 'PAID';
+export type SubmissionStatus = 'PENDING' | 'APPROVED' | 'PAID' | 'REJECTED';
 
 export interface VerificationResult {
   score: number;
   verdict: 'AUTHENTIC' | 'SUSPICIOUS' | 'INCONCLUSIVE';
   findings: string;
   sources: { title: string; uri: string }[];
+  manualNote?: string;
+  verifiedBy?: string;
 }
 
 export interface DriveSubmission {
@@ -35,34 +37,29 @@ export interface DriveSubmission {
   submissionDate: string;
   status: SubmissionStatus;
   
-  // Step 1: Agent & Location
   agentStatus: 'In-house' | 'Freelance';
   propertyName: string;
   propertyAddress: string;
   stateLocation: string;
   coordinates?: { lat: number; lng: number };
-  propertyPhoto?: string; // Base64 or URL
+  propertyPhoto?: string;
 
-  // Step 2: Property Metrics
   propertyCategory: 'Residential' | 'Commercial';
   propertyType: string;
   noOfUnits: number;
   occupancyRate: number;
   meteringType: string;
 
-  // Step 3: Contact Info
   landlordName: string;
   managementType: 'Individual' | 'Company';
   contactPhone: string;
 
-  // Step 4: Sales Intel
   interestLevel: 'High' | 'Medium' | 'Low';
   featuresInterested: string[];
   subscriptionType: string;
   marketingChannels: string[];
   feedback: string;
 
-  // Calculated & AI Verification
   estimatedCommission: number;
   verification?: VerificationResult;
 }
