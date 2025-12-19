@@ -9,12 +9,36 @@ import { User, DriveSubmission, SubmissionStatus, VerificationResult, UserRole }
  * 2. Ensure you have created 'profiles' and 'submissions' tables.
  * 3. Disable any AdBlockers that might block 'supabase.co' domains.
  */
-const supabaseUrl = (process.env as any).SUPABASE_URL || 'https://bfefblahvrgppmqfbuqb.supabase.co';
-const supabaseAnonKey = (process.env as any).SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJmZWZibGFodnJncHBtcWZidXFiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU5OTk3MTQsImV4cCI6MjA4MTU3NTcxNH0._8kBN-PtdIsYQGUV30QQ9KCbZjRWomIdvTYmKpZoF8c';
+
+// Safety check for browser environment where 'process' might not be defined
+const getEnv = (key: string): string => {
+  try {
+    // Vercel / Standard Node
+    if (typeof process !== 'undefined' && process.env && process.env[key]) {
+      return process.env[key] as string;
+    }
+    // Browser global (if injected by a builder)
+    if ((window as any).process?.env?.[key]) {
+      return (window as any).process.env[key];
+    }
+    // Vite / Modern ESM
+    if ((import.meta as any).env?.[key]) {
+      return (import.meta as any).env[key];
+    }
+  } catch (e) {
+    // Fallback silently
+  }
+  return "";
+};
+
+// These fallbacks allow the app to run even if Vercel env vars aren't set yet
+const supabaseUrl = getEnv('SUPABASE_URL') || 'https://bfefblahvrgppmqfbuqb.supabase.co';
+const supabaseAnonKey = getEnv('SUPABASE_ANON_KEY') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJmZWZibGFodnJncHBtcWZidXFiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU5OTk3MTQsImV4cCI6MjA4MTU3NTcxNH0._8kBN-PtdIsYQGUV30QQ9KCbZjRWomIdvTYmKpZoF8c';
 
 // The system-wide internal password for field agents
 const INTERNAL_AUTH_PASSWORD = 'EstateGO_Temporary_Password_123!';
 
+// Check if we have valid-looking credentials
 export const isConfigured = Boolean(
   supabaseUrl && 
   supabaseAnonKey && 
@@ -22,7 +46,7 @@ export const isConfigured = Boolean(
   !supabaseUrl.includes('PASTE_YOUR_SUPABASE_URL')
 );
 
-export const supabase: SupabaseClient | null = (supabaseUrl && supabaseAnonKey && supabaseUrl.startsWith('http')) 
+export const supabase: SupabaseClient | null = (isConfigured) 
   ? createClient(supabaseUrl, supabaseAnonKey) 
   : null;
 

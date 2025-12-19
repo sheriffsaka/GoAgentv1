@@ -23,14 +23,23 @@ const App: React.FC = () => {
       return;
     }
 
-    supabase!.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      if (session) fetchUserData(session.user.id);
-      else setLoading(false);
-    }).catch(err => {
-      setAppError("Connection Error: " + (err.message || "Failed to reach database terminal."));
-      setLoading(false);
-    });
+    const initApp = async () => {
+      try {
+        const { data: { session: currentSession } } = await supabase!.auth.getSession();
+        setSession(currentSession);
+        if (currentSession) {
+          await fetchUserData(currentSession.user.id);
+        } else {
+          setLoading(false);
+        }
+      } catch (err: any) {
+        console.error("Initialization error:", err);
+        setAppError("Connection Error: " + (err.message || "Failed to reach database terminal."));
+        setLoading(false);
+      }
+    };
+
+    initApp();
 
     const { data: { subscription } } = supabase!.auth.onAuthStateChange((_event, session) => {
       setSession(session);
@@ -84,14 +93,24 @@ const App: React.FC = () => {
     } catch (err: any) { alert(err.message); }
   };
 
-  if (!isConfigured) {
+  // If credentials seem totally missing (usually during first setup)
+  if (!isConfigured && !appError) {
     return (
-      <div className="min-h-screen bg-navy-900 flex items-center justify-center p-6">
-        <div className="max-w-md bg-white p-8 rounded-2xl shadow-2xl text-center">
-          <Database size={48} className="mx-auto mb-4 text-cyan-400" />
-          <h1 className="text-xl font-bold">Database Required</h1>
-          <p className="text-gray-500 mt-2 text-sm">Please update your <code>SUPABASE_URL</code> and <code>SUPABASE_ANON_KEY</code> in <code>services/supabaseService.ts</code>.</p>
-          <button onClick={() => window.location.reload()} className="mt-6 w-full bg-navy-900 text-white py-3 rounded-xl font-bold uppercase text-xs tracking-widest">Check Connection</button>
+      <div className="min-h-screen bg-navy-900 flex items-center justify-center p-6 text-white text-center">
+        <div className="max-w-md w-full bg-navy-800 p-8 rounded-3xl border border-navy-700 shadow-2xl">
+          <Database size={48} className="mx-auto mb-6 text-cyan-400" />
+          <h1 className="text-2xl font-bold mb-4 tracking-tight">Vercel Configuration Required</h1>
+          <p className="text-navy-200 mb-8 text-sm leading-relaxed">
+            The database connection is not yet configured in your Vercel Environment Variables.
+            <br/><br/>
+            Ensure <code>SUPABASE_URL</code> and <code>SUPABASE_ANON_KEY</code> are set in Vercel.
+          </p>
+          <button 
+            onClick={() => window.location.reload()} 
+            className="w-full bg-cyan-400 text-navy-900 py-4 rounded-xl font-bold uppercase text-xs tracking-widest hover:bg-cyan-300 transition-all"
+          >
+            Refresh Connection
+          </button>
         </div>
       </div>
     );
@@ -131,15 +150,11 @@ const App: React.FC = () => {
               </li>
               <li className="flex gap-3">
                 <span className="w-4 h-4 rounded-full bg-navy-900 text-white flex-shrink-0 flex items-center justify-center text-[10px]">2</span>
-                <span><strong>Verify URL:</strong> Ensure your Supabase URL doesn't have extra slashes or typos.</span>
+                <span><strong>Vercel Env Vars:</strong> Ensure you added the keys in Vercel Settings and <strong>Redeployed</strong>.</span>
               </li>
               <li className="flex gap-3">
                 <span className="w-4 h-4 rounded-full bg-navy-900 text-white flex-shrink-0 flex items-center justify-center text-[10px]">3</span>
-                <span><strong>Check Project Status:</strong> Log in to Supabase and ensure your project is <strong>Active</strong> (not Paused).</span>
-              </li>
-              <li className="flex gap-3">
-                <span className="w-4 h-4 rounded-full bg-navy-900 text-white flex-shrink-0 flex items-center justify-center text-[10px]">4</span>
-                <span><strong>Disable AdBlockers:</strong> Some extensions block 'supabase.co' requests.</span>
+                <span><strong>Project Status:</strong> Check Supabase dashboard to ensure project isn't "Paused".</span>
               </li>
             </ul>
           </div>

@@ -2,13 +2,23 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { DriveSubmission, VerificationResult } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+const getApiKey = () => {
+  try {
+    return (window as any).process?.env?.API_KEY || "";
+  } catch (e) {
+    return "";
+  }
+};
+
+// Use a helper to get the AI instance only when needed
+const getAI = () => new GoogleGenAI({ apiKey: getApiKey() });
 
 export const AIService = {
   /**
    * Uses Gemini with Search Grounding to verify if a property lead is legitimate.
    */
   verifyFieldVisit: async (submission: DriveSubmission): Promise<VerificationResult> => {
+    const ai = getAI();
     const prompt = `
       Verify the existence and details of the following property lead in Nigeria:
       Property Name: ${submission.propertyName}
@@ -65,6 +75,7 @@ export const AIService = {
   },
 
   analyzeLead: async (submission: DriveSubmission) => {
+    const ai = getAI();
     const prompt = `
       As a Real Estate Growth Expert for EstateGO, analyze this property lead:
       Property: ${submission.propertyName} (${submission.propertyType})
@@ -89,6 +100,7 @@ export const AIService = {
   },
 
   getMarketIntel: async () => {
+    const ai = getAI();
     const prompt = "What are the latest real estate market trends and property management news in Nigeria for 2024? Focus on prop-tech and estate management.";
     
     try {
