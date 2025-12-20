@@ -35,10 +35,9 @@ export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
   useEffect(() => {
     const checkRecovery = () => {
       const hash = window.location.hash;
-      // Detect recovery token in URL hash
+      // Supabase recovery links contain type=recovery or access_token in the URL fragment
       if (hash && (hash.includes('type=recovery') || hash.includes('access_token='))) {
         setView('NEW_PASSWORD');
-        // We keep the hash temporarily so Supabase can process the session
       }
     };
 
@@ -49,13 +48,10 @@ export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
         if (event === 'PASSWORD_RECOVERY') {
           setView('NEW_PASSWORD');
         }
-        if (event === 'SIGNED_IN' && view === 'NEW_PASSWORD') {
-          // Stay in NEW_PASSWORD view if we just signed in via recovery link
-        }
       });
       return () => subscription.unsubscribe();
     }
-  }, [view]);
+  }, []);
 
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -88,9 +84,9 @@ export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
       await SupabaseService.updateUserPassword(password);
       setSuccessMsg("Password updated successfully! You can now access your terminal.");
       setTimeout(() => {
-        // Clear hash and reload to clean state
+        // Clear hash and notify App that we are done with recovery
         window.location.hash = '';
-        window.location.reload();
+        onLogin();
       }, 2000);
     } catch (err: any) {
       setError(err.message || "Unable to update password. Your recovery link might have expired.");
@@ -200,8 +196,14 @@ export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
             <form className="space-y-5" onSubmit={handleResetPassword}>
               <div>
                 <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Registered Agent Email</label>
-                {/* Fixed line 197 below to use proper arrow function for onChange */}
-                <input type="email" required value={email} onChange={e => setEmail(e.target.value)} className="block w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 outline-none focus:bg-white focus:ring-2 focus:ring-cyan-400 transition-all font-medium text-navy-900" placeholder="agent@estatego.app" />
+                <input 
+                  type="email" 
+                  required 
+                  value={email} 
+                  onChange={e => setEmail(e.target.value)} 
+                  className="block w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 outline-none focus:bg-white focus:ring-2 focus:ring-cyan-400 transition-all font-medium text-navy-900" 
+                  placeholder="agent@estatego.app" 
+                />
               </div>
               <button
                 type="submit"

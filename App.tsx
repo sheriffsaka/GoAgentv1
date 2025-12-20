@@ -17,9 +17,16 @@ const App: React.FC = () => {
   const [submissions, setSubmissions] = useState<DriveSubmission[]>([]);
   const [loading, setLoading] = useState(true);
   const [profileError, setProfileError] = useState(false);
+  const [recoveryFlow, setRecoveryFlow] = useState(false);
 
   useEffect(() => {
     if (!isConfigured) { setLoading(false); return; }
+    
+    // Check if we are in a recovery flow via URL hash
+    if (window.location.hash.includes('type=recovery') || window.location.hash.includes('access_token=')) {
+      setRecoveryFlow(true);
+    }
+
     const initApp = async () => {
       try {
         const { data: { session: currentSession } } = await supabase!.auth.getSession();
@@ -28,12 +35,24 @@ const App: React.FC = () => {
         else setLoading(false);
       } catch (err) { setLoading(false); }
     };
+
     initApp();
-    const { data: { subscription } } = supabase!.auth.onAuthStateChange((_event, session) => {
+
+    const { data: { subscription } } = supabase!.auth.onAuthStateChange((event, session) => {
       setSession(session);
-      if (session) fetchUserData(session.user.id);
-      else { setUser(null); setLoading(false); }
+      
+      if (event === 'PASSWORD_RECOVERY') {
+        setRecoveryFlow(true);
+      }
+
+      if (session) {
+        fetchUserData(session.user.id);
+      } else {
+        setUser(null);
+        setLoading(false);
+      }
     });
+
     return () => subscription.unsubscribe();
   }, []);
 
@@ -65,8 +84,20 @@ const App: React.FC = () => {
   
   if (loading) return <div className="min-h-screen bg-navy-900 flex flex-col items-center justify-center"><Loader2 className="animate-spin text-cyan-400" size={48} /><p className="text-white text-[10px] font-black uppercase mt-4">Syncing GoAgentHQ...</p></div>;
 
-  // Recovery UI for missing profiles
-  if (profileError && session) {
+  // Show Auth screen if not logged in, if user profile is missing, OR if we are in the middle of a password recovery
+  if (!session || !user || recoveryFlow) {
+    return (
+      <Auth 
+        onLogin={() => {
+          setRecoveryFlow(false);
+          if (session) fetchUserData(session.user.id);
+        }} 
+      />
+    );
+  }
+
+  // Recovery UI for missing profiles (fallback)
+  if (profileError) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
         <div className="max-w-md w-full bg-white p-8 rounded-3xl shadow-2xl border-t-8 border-navy-900 text-center">
@@ -93,8 +124,6 @@ const App: React.FC = () => {
       </div>
     );
   }
-
-  if (!session || !user) return <Auth onLogin={() => {}} />;
   
   if (!user.agreementSigned) return <AgreementWall onSign={() => SupabaseService.signAgreement(user.id, '127.0.0.1').then(() => fetchUserData(user.id))} />;
 
