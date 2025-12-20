@@ -37,7 +37,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, submissions }) => {
     <div className="space-y-6 md:space-y-8 animate-in fade-in duration-500 pb-12">
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl md:text-3xl font-black text-navy-900 tracking-tighter uppercase italic">HQ // Welcome, {user.fullName.split(' ')[0]}</h1>
+          <h1 className="text-2xl md:text-3xl font-black text-navy-900 tracking-tighter uppercase italic">Welcome, {user.fullName.split(' ')[0]}</h1>
           <p className="text-gray-500 font-medium text-sm">EstateGO Field Operations Terminal</p>
         </div>
         <div className="flex items-center gap-2 bg-white px-4 py-2 rounded-2xl shadow-sm border border-gray-100 w-fit">

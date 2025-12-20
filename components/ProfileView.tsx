@@ -21,7 +21,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ user, onUpdate }) => {
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState({
-    fullName: user.fullName,
+    fullName: user.fullName || '',
     phone: user.phone || '',
     state: user.state || '',
     bankName: user.bankDetails?.bankName || '',
@@ -48,8 +48,17 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ user, onUpdate }) => {
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (err: any) {
-      console.error("Profile Update Error:", err);
-      setError(err.message || "Error committing terminal updates. Check your connection.");
+      console.error("Profile Update Error Detailed:", err);
+      // More robust error stringification to prevent [object Object]
+      let message = "Unknown error occurred.";
+      if (typeof err === 'string') {
+        message = err;
+      } else if (err && typeof err === 'object') {
+        if (err.message) message = err.message;
+        else if (err.error_description) message = err.error_description;
+        else message = JSON.stringify(err);
+      }
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -59,14 +68,17 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ user, onUpdate }) => {
     <div className="max-w-3xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="mb-8">
         <h2 className="text-3xl font-black text-navy-900 uppercase tracking-tighter italic">Terminal Settings</h2>
-        <p className="text-gray-500 font-medium">Configure your agent identity and payout destination.</p>
+        <p className="text-gray-500 font-medium text-sm">Configure your agent identity and payout destination.</p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
         {error && (
-          <div className="p-4 bg-red-50 border-l-4 border-red-500 text-red-700 text-xs rounded-lg shadow-sm flex items-center gap-3 animate-in fade-in">
-            <AlertCircle size={18} className="shrink-0" />
-            <p className="font-bold uppercase tracking-tight leading-tight">{error}</p>
+          <div className="p-4 bg-red-50 border-l-4 border-red-500 text-red-700 text-xs rounded-lg shadow-sm flex items-start gap-3 animate-in fade-in">
+            <AlertCircle size={18} className="shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="font-black uppercase tracking-tight text-[10px] mb-1">Terminal Update Error</p>
+              <p className="font-medium text-[11px] opacity-80 break-words leading-relaxed">{error}</p>
+            </div>
           </div>
         )}
 
@@ -77,18 +89,18 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ user, onUpdate }) => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <label className="block text-[10px] font-black text-gray-400 uppercase mb-2">Full Identity</label>
-              <input type="text" value={formData.fullName} onChange={e => setFormData({...formData, fullName: e.target.value})} className="w-full p-4 bg-gray-50 rounded-2xl border border-gray-100 outline-none focus:bg-white focus:ring-2 focus:ring-navy-900 transition-all font-medium text-navy-900" />
+              <input type="text" required value={formData.fullName} onChange={e => setFormData({...formData, fullName: e.target.value})} className="w-full p-4 bg-gray-50 rounded-2xl border border-gray-100 outline-none focus:bg-white focus:ring-2 focus:ring-navy-900 transition-all font-medium text-navy-900" />
             </div>
             <div>
               <label className="block text-[10px] font-black text-gray-400 uppercase mb-2">Ops Base (State)</label>
-              <select value={formData.state} onChange={e => setFormData({...formData, state: e.target.value})} className="w-full p-4 bg-gray-50 rounded-2xl border border-gray-100 outline-none focus:bg-white focus:ring-2 focus:ring-navy-900 transition-all font-medium text-navy-900">
+              <select required value={formData.state} onChange={e => setFormData({...formData, state: e.target.value})} className="w-full p-4 bg-gray-50 rounded-2xl border border-gray-100 outline-none focus:bg-white focus:ring-2 focus:ring-navy-900 transition-all font-medium text-navy-900">
                 <option value="">Select State</option>
                 {NIGERIAN_STATES.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
             <div className="md:col-span-2">
               <label className="block text-[10px] font-black text-gray-400 uppercase mb-2">Contact Link (Phone)</label>
-              <input type="tel" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} className="w-full p-4 bg-gray-50 rounded-2xl border border-gray-100 outline-none focus:bg-white focus:ring-2 focus:ring-navy-900 transition-all font-medium text-navy-900" />
+              <input type="tel" required value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} className="w-full p-4 bg-gray-50 rounded-2xl border border-gray-100 outline-none focus:bg-white focus:ring-2 focus:ring-navy-900 transition-all font-medium text-navy-900" />
             </div>
           </div>
         </div>

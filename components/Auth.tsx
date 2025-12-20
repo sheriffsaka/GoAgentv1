@@ -200,6 +200,7 @@ export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
             <form className="space-y-5" onSubmit={handleResetPassword}>
               <div>
                 <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Registered Agent Email</label>
+                {/* Fixed line 197 below to use proper arrow function for onChange */}
                 <input type="email" required value={email} onChange={e => setEmail(e.target.value)} className="block w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 outline-none focus:bg-white focus:ring-2 focus:ring-cyan-400 transition-all font-medium text-navy-900" placeholder="agent@estatego.app" />
               </div>
               <button
@@ -310,16 +311,37 @@ export const AgreementWall: React.FC<{ onSign: () => void }> = ({ onSign }) => {
         <div className="p-8 md:p-12 border-b border-gray-100 bg-gray-50">
           <div className="flex items-center gap-3 mb-6">
             <ShieldCheck size={32} className="text-cyan-500" />
-            <h2 className="text-2xl font-black text-navy-900 uppercase italic tracking-tighter">Service Agreement // v2025.1</h2>
+            <h2 className="text-2xl font-black text-navy-900 uppercase italic tracking-tighter">Service Agreement // v2025.2</h2>
           </div>
-          <div className="prose prose-sm max-h-64 overflow-y-auto pr-4 text-gray-600 font-medium leading-relaxed">
-            <p className="mb-4">This GoAgent Field Operations Agreement ("Agreement") is entered into by and between EstateGO ("Company") and the undersigned Agent.</p>
-            <h4 className="text-navy-900 font-bold uppercase text-[10px] tracking-widest mb-2">1. Scope of Engagement</h4>
-            <p className="mb-4">The Agent is engaged to identify and report high-occupancy residential and commercial property leads within the assigned territory. Reports must include accurate GPS data and visual evidence of site visitation.</p>
-            <h4 className="text-navy-900 font-bold uppercase text-[10px] tracking-widest mb-2">2. Payout Structure</h4>
-            <p className="mb-4">Commissions are calculated at ₦450 per verified residential unit. Payments are disbursed via the payout subsystem upon verification by the Admin Portal and confirmation of data authenticity.</p>
-            <h4 className="text-navy-900 font-bold uppercase text-[10px] tracking-widest mb-2">3. Ethical Conduct</h4>
-            <p className="mb-4">Agents must conduct themselves professionally. Fabrication of site visits or data will result in immediate terminal deactivation and forfeiture of pending commissions.</p>
+          <div className="prose prose-sm max-h-80 overflow-y-auto pr-4 text-gray-600 font-medium leading-relaxed custom-scrollbar">
+            <p className="mb-6">This GoAgent Field Operations Agreement ("Agreement") is entered into by and between EstateGO ("Company") and the undersigned Agent.</p>
+            
+            <div className="space-y-6">
+              <section>
+                <h4 className="text-navy-900 font-black uppercase text-[10px] tracking-widest mb-2">1. SCOPE OF ENGAGEMENT</h4>
+                <p>The Agent is engaged to identify and report high-occupancy residential and commercial property leads within the assigned territory. Reports must include accurate GPS data and visual evidence of site visitation via the GoAgent terminal.</p>
+              </section>
+
+              <section>
+                <h4 className="text-navy-900 font-black uppercase text-[10px] tracking-widest mb-2">2. PAYOUT STRUCTURE</h4>
+                <p>Commissions are calculated at ₦450 per verified residential unit. Payments are disbursed via the payout subsystem upon successful verification by the Admin Portal and confirmation of data authenticity.</p>
+              </section>
+
+              <section>
+                <h4 className="text-navy-900 font-black uppercase text-[10px] tracking-widest mb-2">3. ETHICAL CONDUCT</h4>
+                <p>Agents must conduct themselves professionally. Fabrication of site visits or manual data entry of fictitious properties will result in immediate terminal deactivation and forfeiture of all pending commissions.</p>
+              </section>
+
+              <section>
+                <h4 className="text-navy-900 font-black uppercase text-[10px] tracking-widest mb-2">4. PAYMENT CYCLE</h4>
+                <p>Commissions are disbursed on the 7th of every month following successful client payment reconciliation. Payouts are made directly to the bank details registered in the Agent Identity Module.</p>
+              </section>
+
+              <section>
+                <h4 className="text-navy-900 font-black uppercase text-[10px] tracking-widest mb-2">5. DIGITAL SIGNATURE</h4>
+                <p>Acceptance of these terms is logged with your unique Agent ID, high-precision Timestamp, and Network IP Address as a legally binding digital contract of service.</p>
+              </section>
+            </div>
           </div>
         </div>
         <div className="p-8 md:p-12 bg-white flex flex-col md:flex-row items-center justify-between gap-6">

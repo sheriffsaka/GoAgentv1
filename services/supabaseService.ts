@@ -42,17 +42,17 @@ export const SupabaseService = {
     }
 
     if (authData.user) {
+      // Note: 'state' column is missing in 'profiles' table, using Auth Metadata as source of truth instead
       const { error: profileError } = await supabase.from('profiles').upsert({
         id: authData.user.id,
         full_name: fullName,
         email: email,
         phone: phone,
-        state: state,
         bank_details: bankDetails || null,
         role: role,
         agreement_signed: false
       });
-      if (profileError) console.warn("Deferred profile creation triggered.");
+      if (profileError) console.warn("Deferred profile creation warning:", profileError.message);
     }
     return authData.user;
   },
@@ -66,7 +66,6 @@ export const SupabaseService = {
 
   resetPassword: async (email: string) => {
     if (!supabase) throw new Error("Database not connected");
-    // Dynamically get the current origin to ensure reset link points to the hosted app, not localhost
     const redirectUrl = window.location.origin + window.location.pathname;
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: redirectUrl,
@@ -85,36 +84,43 @@ export const SupabaseService = {
   updateProfile: async (userId: string, updates: Partial<User>) => {
     if (!supabase) throw new Error("Database not connected");
     
-    // We use upsert to ensure the row exists and is updated correctly, 
-    // bypasses some common RLS issues with strict updates.
-    const dbUpdates: any = { id: userId };
+    const dbUpdates: any = {};
     if (updates.fullName !== undefined) dbUpdates.full_name = updates.fullName;
     if (updates.phone !== undefined) dbUpdates.phone = updates.phone;
-    if (updates.state !== undefined) dbUpdates.state = updates.state;
     if (updates.bankDetails !== undefined) dbUpdates.bank_details = updates.bankDetails;
 
-    const { error: dbError } = await supabase.from('profiles').upsert(dbUpdates);
-    if (dbError) throw dbError;
+    // Database update (Excluding 'state' as it causes PGRST204)
+    const { error: dbError } = await supabase.from('profiles').update(dbUpdates).eq('id', userId);
+    
+    if (dbError) {
+      console.error("Supabase Profile Update Error:", JSON.stringify(dbError, null, 2));
+      throw dbError;
+    }
 
-    // Synchronize auth metadata so the app has the latest name/state immediately on login
-    await supabase.auth.updateUser({
-      data: {
-        full_name: updates.fullName,
-        phone: updates.phone,
-        state: updates.state
-      }
-    });
+    // Auth metadata update (Stores 'state' successfully)
+    try {
+      await supabase.auth.updateUser({
+        data: {
+          full_name: updates.fullName,
+          phone: updates.phone,
+          state: updates.state
+        }
+      });
+    } catch (authErr) {
+      console.warn("Auth metadata sync failed:", authErr);
+    }
   },
 
   getProfile: async (userId: string): Promise<User> => {
     if (!supabase) throw new Error("Database not connected");
     
-    const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
+    const { data: profile, error } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
     if (error) throw error;
 
-    if (!data) {
-      const { data: authResponse } = await supabase.auth.getUser();
-      const user = authResponse?.user;
+    // Always fetch the current auth user to get metadata (Source of truth for state)
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!profile) {
       if (user) {
         const fullName = user.user_metadata?.full_name || 'Agent Identity Pending';
         const role = user.user_metadata?.role || 'AGENT';
@@ -124,7 +130,6 @@ export const SupabaseService = {
           full_name: fullName,
           email: user.email,
           phone: user.user_metadata?.phone || '',
-          state: user.user_metadata?.state || 'N/A',
           role: role,
           agreement_signed: false
         }).select().single();
@@ -135,7 +140,7 @@ export const SupabaseService = {
             fullName: repaired.full_name,
             email: repaired.email,
             phone: repaired.phone,
-            state: repaired.state || 'N/A',
+            state: user.user_metadata?.state || 'N/A',
             role: repaired.role,
             bankDetails: repaired.bank_details,
             agreementSigned: repaired.agreement_signed,
@@ -149,17 +154,17 @@ export const SupabaseService = {
     }
 
     return {
-      id: data.id,
-      fullName: data.full_name,
-      email: data.email,
-      phone: data.phone,
-      state: data.state || 'N/A',
-      role: data.role,
-      bankDetails: data.bank_details,
-      agreementSigned: data.agreement_signed,
-      agreementTimestamp: data.agreement_timestamp,
-      agreementIp: data.agreement_ip,
-      createdAt: data.created_at
+      id: profile.id,
+      fullName: profile.full_name,
+      email: profile.email,
+      phone: profile.phone,
+      state: user?.user_metadata?.state || 'N/A',
+      role: profile.role,
+      bankDetails: profile.bank_details,
+      agreementSigned: profile.agreement_signed,
+      agreementTimestamp: profile.agreement_timestamp,
+      agreementIp: profile.agreement_ip,
+      createdAt: profile.created_at
     };
   },
 
@@ -172,7 +177,7 @@ export const SupabaseService = {
       fullName: d.full_name,
       email: d.email,
       phone: d.phone,
-      state: d.state || 'N/A',
+      state: 'N/A', // State unavailable in profiles table list view
       role: d.role,
       bankDetails: d.bank_details,
       agreementSigned: d.agreement_signed,
@@ -182,11 +187,12 @@ export const SupabaseService = {
 
   signAgreement: async (userId: string, ip: string) => {
     if (!supabase) throw new Error("Database not connected");
-    await supabase.from('profiles').update({ 
+    const { error } = await supabase.from('profiles').update({ 
       agreement_signed: true, 
       agreement_timestamp: new Date().toISOString(), 
       agreement_ip: ip 
     }).eq('id', userId);
+    if (error) throw error;
   },
 
   getSubmissions: async (role: string, userId: string): Promise<DriveSubmission[]> => {
