@@ -11,14 +11,16 @@ const NIGERIAN_STATES = [
   "Taraba", "Yobe", "Zamfara"
 ];
 
-interface AuthProps {
-  onLogin: () => void;
-}
-
 type AuthView = 'LOGIN' | 'REGISTER' | 'RESET' | 'NEW_PASSWORD';
 
-export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
-  const [view, setView] = useState<AuthView>('LOGIN');
+interface AuthProps {
+  onLogin: () => void;
+  initialView?: AuthView;
+}
+
+export const Auth: React.FC<AuthProps> = ({ onLogin, initialView = 'LOGIN' }) => {
+  // Use initialView if provided, otherwise default to LOGIN
+  const [view, setView] = useState<AuthView>(initialView);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<React.ReactNode | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -31,27 +33,12 @@ export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
   const [state, setState] = useState('');
   const [adminCode, setAdminCode] = useState('');
 
-  // Automatically detect recovery links in URL
+  // Handle external view changes (like from PASSWORD_RECOVERY event in App)
   useEffect(() => {
-    const checkRecovery = () => {
-      const hash = window.location.hash;
-      // Supabase recovery links contain type=recovery or access_token in the URL fragment
-      if (hash && (hash.includes('type=recovery') || hash.includes('access_token='))) {
-        setView('NEW_PASSWORD');
-      }
-    };
-
-    checkRecovery();
-
-    if (supabase) {
-      const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-        if (event === 'PASSWORD_RECOVERY') {
-          setView('NEW_PASSWORD');
-        }
-      });
-      return () => subscription.unsubscribe();
+    if (initialView === 'NEW_PASSWORD') {
+      setView('NEW_PASSWORD');
     }
-  }, []);
+  }, [initialView]);
 
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -82,9 +69,9 @@ export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
     setError(null);
     try {
       await SupabaseService.updateUserPassword(password);
-      setSuccessMsg("Password updated successfully! You can now access your terminal.");
+      setSuccessMsg("Identity restored! Terminal password updated successfully.");
       setTimeout(() => {
-        // Clear hash and notify App that we are done with recovery
+        // Clear hash and notify App
         window.location.hash = '';
         onLogin();
       }, 2000);
@@ -218,8 +205,9 @@ export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
             </form>
           ) : view === 'NEW_PASSWORD' ? (
             <form className="space-y-5" onSubmit={handleUpdatePassword}>
-              <div className="p-4 bg-navy-50 rounded-xl border border-navy-100 mb-4">
-                <p className="text-[10px] font-bold text-navy-800 uppercase leading-tight">Identity verified. Please establish your new terminal password.</p>
+              <div className="p-4 bg-navy-50 rounded-xl border border-navy-100 mb-4 flex items-start gap-3">
+                <ShieldCheck className="text-navy-800 shrink-0" size={18} />
+                <p className="text-[10px] font-bold text-navy-800 uppercase leading-tight">Identity module authorized. Establish your new terminal password to regain access.</p>
               </div>
               <div>
                 <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">New Terminal Password</label>
@@ -234,7 +222,7 @@ export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
                 disabled={loading}
                 className="w-full flex justify-center items-center gap-2 py-4 px-4 rounded-2xl shadow-xl text-sm font-black text-navy-900 bg-cyan-400 hover:bg-cyan-300 disabled:opacity-50 transition-all uppercase tracking-widest"
               >
-                {loading ? <RefreshCw className="animate-spin" /> : <><Lock size={18}/> Set New Password</>}
+                {loading ? <RefreshCw className="animate-spin" /> : <><Lock size={18}/> Restore Identity</>}
               </button>
             </form>
           ) : (

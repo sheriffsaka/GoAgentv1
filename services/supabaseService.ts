@@ -42,7 +42,6 @@ export const SupabaseService = {
     }
 
     if (authData.user) {
-      // Note: 'state' column is missing in 'profiles' table, using Auth Metadata as source of truth instead
       const { error: profileError } = await supabase.from('profiles').upsert({
         id: authData.user.id,
         full_name: fullName,
@@ -66,7 +65,8 @@ export const SupabaseService = {
 
   resetPassword: async (email: string) => {
     if (!supabase) throw new Error("Database not connected");
-    const redirectUrl = window.location.origin + window.location.pathname;
+    // Ensure the redirect URL is exactly the current base origin
+    const redirectUrl = window.location.origin;
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: redirectUrl,
     });
@@ -89,7 +89,6 @@ export const SupabaseService = {
     if (updates.phone !== undefined) dbUpdates.phone = updates.phone;
     if (updates.bankDetails !== undefined) dbUpdates.bank_details = updates.bankDetails;
 
-    // Database update (Excluding 'state' as it causes PGRST204)
     const { error: dbError } = await supabase.from('profiles').update(dbUpdates).eq('id', userId);
     
     if (dbError) {
@@ -97,7 +96,6 @@ export const SupabaseService = {
       throw dbError;
     }
 
-    // Auth metadata update (Stores 'state' successfully)
     try {
       await supabase.auth.updateUser({
         data: {
@@ -117,7 +115,6 @@ export const SupabaseService = {
     const { data: profile, error } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
     if (error) throw error;
 
-    // Always fetch the current auth user to get metadata (Source of truth for state)
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!profile) {
@@ -177,7 +174,7 @@ export const SupabaseService = {
       fullName: d.full_name,
       email: d.email,
       phone: d.phone,
-      state: 'N/A', // State unavailable in profiles table list view
+      state: 'N/A', 
       role: d.role,
       bankDetails: d.bank_details,
       agreementSigned: d.agreement_signed,

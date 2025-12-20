@@ -19,11 +19,19 @@ const App: React.FC = () => {
   const [profileError, setProfileError] = useState(false);
   const [recoveryFlow, setRecoveryFlow] = useState(false);
 
+  // Use a ref or a one-time check to see if we started with a recovery link
+  // This is crucial because Supabase clears the hash almost immediately
   useEffect(() => {
     if (!isConfigured) { setLoading(false); return; }
     
-    // Check if we are in a recovery flow via URL hash
-    if (window.location.hash.includes('type=recovery') || window.location.hash.includes('access_token=')) {
+    const hash = window.location.hash;
+    const search = window.location.search;
+    const isRecovery = hash.includes('type=recovery') || 
+                       hash.includes('access_token=') || 
+                       search.includes('type=recovery');
+
+    if (isRecovery) {
+      console.log("Terminal recovery detected in URL");
       setRecoveryFlow(true);
     }
 
@@ -31,8 +39,13 @@ const App: React.FC = () => {
       try {
         const { data: { session: currentSession } } = await supabase!.auth.getSession();
         setSession(currentSession);
-        if (currentSession) await fetchUserData(currentSession.user.id);
-        else setLoading(false);
+        
+        // If we found a session but aren't in recovery, get user data
+        if (currentSession && !isRecovery) {
+          await fetchUserData(currentSession.user.id);
+        } else {
+          setLoading(false);
+        }
       } catch (err) { setLoading(false); }
     };
 
@@ -46,7 +59,12 @@ const App: React.FC = () => {
       }
 
       if (session) {
-        fetchUserData(session.user.id);
+        // Only fetch profile if we aren't mid-recovery
+        // We check recoveryFlow state here which was set on mount or by event
+        if (event !== 'PASSWORD_RECOVERY' && !window.location.hash.includes('access_token')) {
+           // We only fetch data if we're NOT in a recovery state
+           fetchUserData(session.user.id);
+        }
       } else {
         setUser(null);
         setLoading(false);
@@ -84,10 +102,14 @@ const App: React.FC = () => {
   
   if (loading) return <div className="min-h-screen bg-navy-900 flex flex-col items-center justify-center"><Loader2 className="animate-spin text-cyan-400" size={48} /><p className="text-white text-[10px] font-black uppercase mt-4">Syncing GoAgentHQ...</p></div>;
 
-  // Show Auth screen if not logged in, if user profile is missing, OR if we are in the middle of a password recovery
-  if (!session || !user || recoveryFlow) {
+  // We show Auth if:
+  // 1. We detected a recovery flow in the URL (highest priority)
+  // 2. No session exists
+  // 3. User profile data hasn't loaded yet
+  if (recoveryFlow || !session || !user) {
     return (
       <Auth 
+        initialView={recoveryFlow ? 'NEW_PASSWORD' : 'LOGIN'}
         onLogin={() => {
           setRecoveryFlow(false);
           if (session) fetchUserData(session.user.id);
@@ -96,7 +118,6 @@ const App: React.FC = () => {
     );
   }
 
-  // Recovery UI for missing profiles (fallback)
   if (profileError) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
