@@ -1,7 +1,7 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { User, DriveSubmission } from '../types';
-import { Wallet, Users, Target, Clock, CheckCircle, Sparkles, RefreshCw, Layers, TrendingUp, ChevronRight, MapPin, Building2 } from 'lucide-react';
+import { Wallet, Users, Target, Clock, CheckCircle, Sparkles, RefreshCw, Layers, TrendingUp, ChevronRight, MapPin, Building2, BarChart3 } from 'lucide-react';
 import { AIService } from '../services/aiService';
 
 interface DashboardProps {
@@ -24,14 +24,30 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, submissions }) => {
   const agentSubmissions = user.role === 'ADMIN' ? submissions : submissions.filter(s => s.agentId === user.id);
 
   // Stats Logic
-  const totalCommissionPaid = agentSubmissions.filter(s => s.status === 'PAID').reduce((a, b) => a + b.estimatedCommission, 0);
-  const pendingPayouts = agentSubmissions.filter(s => s.status === 'APPROVED').reduce((a, b) => a + b.estimatedCommission, 0);
-  const totalUnits = agentSubmissions.reduce((a, b) => a + b.noOfUnits, 0);
+  const totalCommissionPaid = agentSubmissions.filter(s => s.status === 'PAID').reduce((a, b) => a + (b.estimatedCommission || 0), 0);
+  const pendingPayouts = agentSubmissions.filter(s => s.status === 'APPROVED').reduce((a, b) => a + (b.estimatedCommission || 0), 0);
+  const totalUnits = agentSubmissions.reduce((a, b) => a + (b.noOfUnits || 0), 0);
   
   // Admin-Specific stats
   const totalVolume = submissions.reduce((a, b) => a + (b.estimatedCommission || 0), 0);
   const totalDisbursed = submissions.filter(s => s.status === 'PAID').reduce((a, b) => a + (b.estimatedCommission || 0), 0);
   const totalPendingPayouts = submissions.filter(s => s.status === 'APPROVED').reduce((a, b) => a + (b.estimatedCommission || 0), 0);
+
+  // Chart Data Preparation (January to December)
+  const chartData = useMemo(() => {
+    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const currentYear = new Date().getFullYear();
+
+    return months.map((month, index) => {
+      const count = agentSubmissions.filter(s => {
+        const subDate = new Date(s.submissionDate);
+        return subDate.getFullYear() === currentYear && subDate.getMonth() === index;
+      }).length;
+      return { month, count };
+    });
+  }, [agentSubmissions]);
+
+  const maxCount = Math.max(...chartData.map(d => d.count), 1);
 
   return (
     <div className="space-y-6 md:space-y-8 animate-in fade-in duration-500 pb-12">
@@ -65,6 +81,51 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, submissions }) => {
         )}
       </div>
 
+      {/* Trends Chart Section */}
+      <div className="bg-white p-6 md:p-8 rounded-3xl shadow-sm border border-gray-100">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+          <div>
+            <h3 className="font-black text-navy-900 uppercase tracking-widest text-sm flex items-center gap-2">
+              <BarChart3 size={18} className="text-cyan-500" /> 
+              {user.role === 'ADMIN' ? 'Global Annual Performance' : 'My Performance Trends'}
+            </h3>
+            <p className="text-[10px] font-bold text-gray-400 uppercase mt-1">Monthly onboarding activity for {new Date().getFullYear()}</p>
+          </div>
+          <div className="px-3 py-1 bg-gray-50 rounded-lg text-[9px] font-black text-gray-400 uppercase border border-gray-100">
+            Node: FIELD_DATA_VIZ_ANNUAL
+          </div>
+        </div>
+
+        <div className="relative h-48 md:h-64 flex items-end justify-between gap-1 md:gap-3 px-1">
+          {chartData.map((data, i) => (
+            <div key={i} className="flex-1 flex flex-col items-center group">
+              <div className="relative w-full flex flex-col items-center justify-end h-full">
+                {/* Value tooltip on hover */}
+                <div className="absolute -top-8 bg-navy-900 text-white text-[9px] font-black px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10 shadow-xl">
+                  {data.count} Leads in {data.month}
+                </div>
+                {/* Bar */}
+                <div 
+                  className={`w-full max-w-[32px] rounded-t-lg transition-all duration-700 ease-out shadow-sm ${data.count > 0 ? 'bg-cyan-400' : 'bg-gray-100'}`}
+                  style={{ height: `${(data.count / maxCount) * 100}%` }}
+                />
+              </div>
+              <p className="text-[9px] md:text-[10px] font-black text-gray-400 uppercase mt-3 tracking-tighter truncate w-full text-center">
+                {data.month}
+              </p>
+            </div>
+          ))}
+          
+          {/* Grid lines */}
+          <div className="absolute inset-0 pointer-events-none flex flex-col justify-between pt-2 pb-8 opacity-[0.03]">
+            <div className="w-full h-px bg-navy-900" />
+            <div className="w-full h-px bg-navy-900" />
+            <div className="w-full h-px bg-navy-900" />
+            <div className="w-full h-px bg-navy-900" />
+          </div>
+        </div>
+      </div>
+
       {/* AGENT VIEW: SUBMISSION HISTORY (RESPONSIVE) */}
       {user.role === 'AGENT' && (
         <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
@@ -73,7 +134,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, submissions }) => {
             <span className="text-[10px] font-bold text-gray-400 uppercase">{agentSubmissions.length} Entries</span>
           </div>
 
-          {/* Desktop Table */}
           <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-left">
               <thead>
@@ -104,7 +164,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, submissions }) => {
             </table>
           </div>
 
-          {/* Mobile Card List */}
           <div className="md:hidden divide-y divide-gray-50">
             {agentSubmissions.length === 0 ? (
               <div className="p-12 text-center text-gray-400 font-bold uppercase text-xs">No reports yet.</div>
@@ -140,13 +199,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, submissions }) => {
               <RefreshCw size={14} className={loadingIntel ? 'animate-spin' : ''} />
             </button>
           </div>
-          <div className="text-xs md:text-sm text-navy-100 leading-relaxed font-medium max-w-2xl">
+          <div className="text-xs md:text-sm text-navy-100 leading-relaxed font-medium max-w-2xl whitespace-pre-wrap">
             {loadingIntel ? (
               <div className="flex items-center gap-3 py-4">
                 <div className="w-4 h-4 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
                 <span>Synchronizing with latest Nigerian Prop-Tech data...</span>
               </div>
-            ) : marketIntel?.text}
+            ) : (marketIntel?.text || "Terminal refreshing...")}
           </div>
           {!loadingIntel && marketIntel?.sources && marketIntel.sources.length > 0 && (
             <div className="mt-6 flex flex-wrap gap-2">
