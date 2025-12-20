@@ -82,17 +82,17 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, submissions }) => {
       </div>
 
       {/* Trends Chart Section */}
-      <div className="bg-white p-6 md:p-8 rounded-3xl shadow-sm border border-gray-100">
+      <div className="bg-white p-6 md:p-8 rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
           <div>
             <h3 className="font-black text-navy-900 uppercase tracking-widest text-sm flex items-center gap-2">
               <BarChart3 size={18} className="text-cyan-500" /> 
-              {user.role === 'ADMIN' ? 'Global Annual Performance' : 'My Performance Trends'}
+              {user.role === 'ADMIN' ? 'Global Annual Performance' : 'Annual Growth Trends'}
             </h3>
             <p className="text-[10px] font-bold text-gray-400 uppercase mt-1">Monthly onboarding activity for {new Date().getFullYear()}</p>
           </div>
           <div className="px-3 py-1 bg-gray-50 rounded-lg text-[9px] font-black text-gray-400 uppercase border border-gray-100">
-            Node: FIELD_DATA_VIZ_ANNUAL
+            Node: FIELD_DATA_ANNUAL
           </div>
         </div>
 
@@ -101,16 +101,16 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, submissions }) => {
             <div key={i} className="flex-1 flex flex-col items-center group">
               <div className="relative w-full flex flex-col items-center justify-end h-full">
                 {/* Value tooltip on hover */}
-                <div className="absolute -top-8 bg-navy-900 text-white text-[9px] font-black px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10 shadow-xl">
-                  {data.count} Leads in {data.month}
+                <div className="absolute -top-10 bg-navy-900 text-white text-[9px] font-black px-2 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-all scale-95 group-hover:scale-100 pointer-events-none whitespace-nowrap z-20 shadow-xl border border-navy-700">
+                  {data.count} {data.count === 1 ? 'Lead' : 'Leads'} • {data.month}
                 </div>
                 {/* Bar */}
                 <div 
-                  className={`w-full max-w-[32px] rounded-t-lg transition-all duration-700 ease-out shadow-sm ${data.count > 0 ? 'bg-cyan-400' : 'bg-gray-100'}`}
+                  className={`w-full max-w-[24px] md:max-w-[40px] rounded-t-md md:rounded-t-lg transition-all duration-700 ease-out shadow-sm cursor-pointer hover:brightness-110 ${data.count > 0 ? 'bg-cyan-400' : 'bg-gray-100'}`}
                   style={{ height: `${(data.count / maxCount) * 100}%` }}
                 />
               </div>
-              <p className="text-[9px] md:text-[10px] font-black text-gray-400 uppercase mt-3 tracking-tighter truncate w-full text-center">
+              <p className="text-[8px] md:text-[10px] font-black text-gray-400 uppercase mt-3 tracking-tighter text-center">
                 {data.month}
               </p>
             </div>
@@ -118,10 +118,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, submissions }) => {
           
           {/* Grid lines */}
           <div className="absolute inset-0 pointer-events-none flex flex-col justify-between pt-2 pb-8 opacity-[0.03]">
-            <div className="w-full h-px bg-navy-900" />
-            <div className="w-full h-px bg-navy-900" />
-            <div className="w-full h-px bg-navy-900" />
-            <div className="w-full h-px bg-navy-900" />
+            {[...Array(5)].map((_, i) => (
+              <div key={i} className="w-full h-px bg-navy-900" />
+            ))}
           </div>
         </div>
       </div>

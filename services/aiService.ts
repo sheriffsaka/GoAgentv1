@@ -2,14 +2,13 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { DriveSubmission, VerificationResult } from "../types";
 
-// Helper to check if API Key is configured
-const hasApiKey = () => {
-  return typeof process !== 'undefined' && process.env.API_KEY && process.env.API_KEY.length > 10;
-};
-
-// Always initialize with the up-to-date API key right before making an API call
+/**
+ * Standard initializer following @google/genai guidelines.
+ * We rely on the environment providing process.env.API_KEY.
+ */
 const getAI = () => {
-  if (!hasApiKey()) {
+  const apiKey = process.env.API_KEY;
+  if (!apiKey || apiKey.length < 5) {
     throw new Error("TERMINAL_AUTH_MISSING");
   }
   return new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -82,14 +81,14 @@ export const AIService = {
         return {
           score: 0,
           verdict: 'INCONCLUSIVE',
-          findings: "Verification Blocked: API_KEY environment variable is not configured on the host server. Please update terminal configuration in the deployment dashboard.",
+          findings: "Verification Blocked: API_KEY environment variable is not set on the production server. Please configure it in your deployment settings.",
           sources: []
         };
       }
       return {
         score: 0,
         verdict: 'INCONCLUSIVE',
-        findings: "System error during AI verification. Automated scan failed. Manual review required.",
+        findings: "System error during AI verification. Manual check required.",
         sources: []
       };
     }
@@ -146,12 +145,11 @@ export const AIService = {
       
       if (error.message === "TERMINAL_AUTH_MISSING") {
         return {
-          text: "ERROR: [TERMINAL_AUTH_OFFLINE]\nThe AI Intelligence module requires an API_KEY to be set in your deployment environment (e.g., Vercel Dashboard). Contact system administrator to configure the GoAgent Terminal properly.",
+          text: "ERROR: [TERMINAL_AUTH_OFFLINE]\nThe AI Intelligence module requires an API_KEY environment variable. Please add 'API_KEY' to your hosting dashboard (Vercel/Netlify) to activate market insights.",
           sources: []
         };
       }
 
-      // Fallback: If search fails but key exists, use internal knowledge
       try {
         const ai = getAI();
         const fallbackResponse = await ai.models.generateContent({
@@ -164,7 +162,7 @@ export const AIService = {
         };
       } catch (innerError) {
         return {
-          text: "Market intelligence terminal is currently refreshing. Growth metrics show sustained interest in managed high-occupancy estates.",
+          text: "Terminal update in progress. Market demand for high-occupancy managed estates remains strong across key Nigerian urban centers.",
           sources: []
         };
       }
