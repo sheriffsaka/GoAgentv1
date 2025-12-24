@@ -2,10 +2,6 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { DriveSubmission, VerificationResult } from "../types";
 
-/**
- * Standard initializer following @google/genai guidelines.
- * We rely on the environment providing process.env.API_KEY.
- */
 const getAI = () => {
   const apiKey = process.env.API_KEY;
   if (!apiKey || apiKey.length < 5) {
@@ -15,9 +11,6 @@ const getAI = () => {
 };
 
 export const AIService = {
-  /**
-   * Uses Gemini with Search Grounding to verify if a property lead is legitimate.
-   */
   verifyFieldVisit: async (submission: DriveSubmission): Promise<VerificationResult> => {
     try {
       const ai = getAI();
@@ -64,16 +57,30 @@ export const AIService = {
         },
       });
 
-      const result: VerificationResult = JSON.parse(response.text || "{}");
+      let result: any = {};
+      try {
+        result = JSON.parse(response.text || "{}");
+      } catch (e) {
+        throw new Error("AI returned invalid JSON: " + response.text);
+      }
       
       const searchSources = response.candidates?.[0]?.groundingMetadata?.groundingChunks?.map((chunk: any) => ({
-        title: chunk.web?.title || "Search Verification Source",
-        uri: chunk.web?.uri
+        title: String(chunk.web?.title || "Search Verification Source"),
+        uri: String(chunk.web?.uri || "")
       })).filter((s: any) => s.uri) || [];
 
+      // Strict validation of findings to ensure it's a string
+      const findings = typeof result.findings === 'object' 
+        ? JSON.stringify(result.findings) 
+        : String(result.findings || "No specific findings recorded.");
+
+      const existingSources = Array.isArray(result.sources) ? result.sources : [];
+
       return {
-        ...result,
-        sources: [...(result.sources || []), ...searchSources]
+        score: typeof result.score === 'number' ? result.score : 0,
+        verdict: (['AUTHENTIC', 'SUSPICIOUS', 'INCONCLUSIVE'].includes(result.verdict) ? result.verdict : 'INCONCLUSIVE') as any,
+        findings: findings,
+        sources: [...existingSources, ...searchSources]
       };
     } catch (error: any) {
       console.error("AI Verification Error:", error);
@@ -81,7 +88,7 @@ export const AIService = {
         return {
           score: 0,
           verdict: 'INCONCLUSIVE',
-          findings: "Verification Blocked: API_KEY environment variable is not set on the production server. Please configure it in your deployment settings.",
+          findings: "Verification Blocked: API_KEY environment variable is not set on the production server.",
           sources: []
         };
       }
@@ -112,7 +119,7 @@ export const AIService = {
         model: 'gemini-3-pro-preview',
         contents: prompt,
       });
-      return response.text || "No analysis available.";
+      return String(response.text || "No analysis available.");
     } catch (error) {
       return "Unable to generate AI analysis at this time.";
     }
@@ -132,12 +139,12 @@ export const AIService = {
       });
 
       const sources = response.candidates?.[0]?.groundingMetadata?.groundingChunks?.map((chunk: any) => ({
-        title: chunk.web?.title || "Market Intelligence Source",
-        uri: chunk.web?.uri
+        title: String(chunk.web?.title || "Market Intelligence Source"),
+        uri: String(chunk.web?.uri || "")
       })).filter((s: any) => s.uri) || [];
 
       return {
-        text: response.text || "No market intelligence available at this time.",
+        text: String(response.text || "No market intelligence available at this time."),
         sources: sources.slice(0, 5)
       };
     } catch (error: any) {
@@ -145,7 +152,7 @@ export const AIService = {
       
       if (error.message === "TERMINAL_AUTH_MISSING") {
         return {
-          text: "ERROR: [TERMINAL_AUTH_OFFLINE]\nThe AI Intelligence module requires an API_KEY environment variable. Please add 'API_KEY' to your hosting dashboard (Vercel/Netlify) to activate market insights.",
+          text: "ERROR: [TERMINAL_AUTH_OFFLINE]\nThe AI Intelligence module requires an API_KEY environment variable.",
           sources: []
         };
       }
@@ -154,15 +161,15 @@ export const AIService = {
         const ai = getAI();
         const fallbackResponse = await ai.models.generateContent({
           model: 'gemini-3-pro-preview',
-          contents: prompt + "\n(Note: Search tool currently limited. Use internal knowledge base.)",
+          contents: prompt + "\n(Note: Search tool currently limited.)",
         });
         return {
-          text: fallbackResponse.text || "Market Insight: Increasing demand for digital estate management tools is transforming the Nigerian residential market.",
+          text: String(fallbackResponse.text || "Market Insight: Increasing urbanization is driving prop-tech demand."),
           sources: []
         };
       } catch (innerError) {
         return {
-          text: "Terminal update in progress. Market demand for high-occupancy managed estates remains strong across key Nigerian urban centers.",
+          text: "Terminal update in progress. Market demand remains strong.",
           sources: []
         };
       }

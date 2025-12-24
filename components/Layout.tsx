@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { User } from '../types';
-import { LayoutDashboard, FilePlus, Users, LogOut, Menu, X, UserCircle, Shield, User as UserIcon } from 'lucide-react';
+import { LayoutDashboard, FilePlus, Users, LogOut, Menu, X, UserCircle, Shield, User as UserIcon, BarChart3 } from 'lucide-react';
 
 interface LayoutProps {
   user: User;
@@ -17,7 +17,7 @@ export const Layout: React.FC<LayoutProps> = ({ user, activeTab, setActiveTab, o
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'form', label: 'Drive Report', icon: FilePlus },
-    ...(user.role === 'ADMIN' ? [{ id: 'admin', label: 'Admin Portal', icon: Users }] : []),
+    ...(user.role === 'ADMIN' ? [{ id: 'admin', label: 'Reports & Analytics', icon: BarChart3 }] : []),
     { id: 'profile', label: 'Profile Settings', icon: UserCircle },
   ] as const;
 

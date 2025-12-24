@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, DriveSubmission, SubmissionStatus, VerificationResult } from './types';
 import { SupabaseService, supabase, isConfigured } from './services/supabaseService';
-import { Auth, AgreementWall } from './components/Auth';
+import { Auth, AgreementWall, parseErrorMessage } from './components/Auth';
 import { Layout } from './components/Layout';
 import { Dashboard } from './components/Dashboard';
 import { DriveForm } from './components/DriveForm';
@@ -19,8 +19,6 @@ const App: React.FC = () => {
   const [profileError, setProfileError] = useState(false);
   const [recoveryFlow, setRecoveryFlow] = useState(false);
 
-  // Use a ref or a one-time check to see if we started with a recovery link
-  // This is crucial because Supabase clears the hash almost immediately
   useEffect(() => {
     if (!isConfigured) { setLoading(false); return; }
     
@@ -40,7 +38,6 @@ const App: React.FC = () => {
         const { data: { session: currentSession } } = await supabase!.auth.getSession();
         setSession(currentSession);
         
-        // If we found a session but aren't in recovery, get user data
         if (currentSession && !isRecovery) {
           await fetchUserData(currentSession.user.id);
         } else {
@@ -59,10 +56,7 @@ const App: React.FC = () => {
       }
 
       if (session) {
-        // Only fetch profile if we aren't mid-recovery
-        // We check recoveryFlow state here which was set on mount or by event
         if (event !== 'PASSWORD_RECOVERY' && !window.location.hash.includes('access_token')) {
-           // We only fetch data if we're NOT in a recovery state
            fetchUserData(session.user.id);
         }
       } else {
@@ -95,17 +89,16 @@ const App: React.FC = () => {
     try {
       await SupabaseService.updateSubmission(id, status, verification);
       setSubmissions(prev => prev.map(s => s.id === id ? { ...s, status, verification: verification || s.verification } : s));
-    } catch (err: any) { alert(err.message); }
+    } catch (err: any) { 
+      const msg = parseErrorMessage(err);
+      alert(msg); 
+    }
   };
 
   if (!isConfigured) return <div className="min-h-screen bg-navy-900 text-white flex items-center justify-center p-8 text-center"><Database size={48}/><h1 className="mt-4 font-black">Missing Credentials</h1></div>;
   
   if (loading) return <div className="min-h-screen bg-navy-900 flex flex-col items-center justify-center"><Loader2 className="animate-spin text-cyan-400" size={48} /><p className="text-white text-[10px] font-black uppercase mt-4">Syncing GoAgentHQ...</p></div>;
 
-  // We show Auth if:
-  // 1. We detected a recovery flow in the URL (highest priority)
-  // 2. No session exists
-  // 3. User profile data hasn't loaded yet
   if (recoveryFlow || !session || !user) {
     return (
       <Auth 

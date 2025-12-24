@@ -5,7 +5,7 @@ import { AlertCircle, RefreshCw, UserPlus, LogIn, Info, KeyRound, ArrowLeft, Che
 
 const NIGERIAN_STATES = [
   "Abia", "Adamawa", "Akwa Ibom", "Anambra", "Bauchi", "Bayelsa", "Benue", "Borno", 
-  "Cross River", "Delta", "Ebonyi", "Edo", "Ekiti", "Enugu", "FCT - Abuja", "Gombe", 
+  "Cross River", "Delta", "Ebonyi", "Ekiti", "Enugu", "FCT - Abuja", "Gombe", 
   "Imo", "Jigawa", "Kaduna", "Kano", "Katsina", "Kebbi", "Kogi", "Kwara", "Lagos", 
   "Nasarawa", "Niger", "Ogun", "Ondo", "Osun", "Oyo", "Plateau", "Rivers", "Sokoto", 
   "Taraba", "Yobe", "Zamfara"
@@ -18,8 +18,47 @@ interface AuthProps {
   initialView?: AuthView;
 }
 
+/**
+ * Robustly parses any error into a displayable string.
+ * Prevents [object Object] by checking types and stringifying objects.
+ */
+export const parseErrorMessage = (err: any): string => {
+  if (!err) return "An unknown error occurred.";
+  if (typeof err === 'string') {
+    return err === '[object Object]' ? "An unexpected structured error occurred." : err;
+  }
+  
+  // Handle Supabase/Standard Error objects
+  if (err.message && typeof err.message === 'string') {
+    return err.message;
+  }
+  
+  // Handle specific Supabase Auth error patterns
+  if (err.error_description && typeof err.error_description === 'string') {
+    return err.error_description;
+  }
+  
+  if (err.error && typeof err.error === 'string') {
+    return err.error;
+  }
+
+  // Fallback to JSON stringification if it's an object
+  try {
+    const stringified = JSON.stringify(err);
+    if (stringified === '{}') {
+      // If it's a native Error object, String() will give 'Error: message'
+      // If it's a plain object {}, String() will give '[object Object]'
+      const str = String(err);
+      return str === '[object Object]' ? "System error: Profile or data mismatch detected." : str;
+    }
+    return stringified;
+  } catch {
+    const finalFallback = String(err);
+    return finalFallback === '[object Object]' ? "Critical system error occurred." : finalFallback;
+  }
+};
+
 export const Auth: React.FC<AuthProps> = ({ onLogin, initialView = 'LOGIN' }) => {
-  // Use initialView if provided, otherwise default to LOGIN
   const [view, setView] = useState<AuthView>(initialView);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<React.ReactNode | null>(null);
@@ -31,9 +70,7 @@ export const Auth: React.FC<AuthProps> = ({ onLogin, initialView = 'LOGIN' }) =>
   const [confirmPassword, setConfirmPassword] = useState('');
   const [phone, setPhone] = useState('');
   const [state, setState] = useState('');
-  const [adminCode, setAdminCode] = useState('');
 
-  // Handle external view changes (like from PASSWORD_RECOVERY event in App)
   useEffect(() => {
     if (initialView === 'NEW_PASSWORD') {
       setView('NEW_PASSWORD');
@@ -47,9 +84,9 @@ export const Auth: React.FC<AuthProps> = ({ onLogin, initialView = 'LOGIN' }) =>
     setSuccessMsg(null);
     try {
       await SupabaseService.resetPassword(email);
-      setSuccessMsg("Terminal Recovery Link Sent! Please check your email to set your new password.");
+      setSuccessMsg("Password reset link sent! Please check your email inbox.");
     } catch (err: any) {
-      setError(err.message || "Unable to trigger recovery.");
+      setError(parseErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -69,14 +106,13 @@ export const Auth: React.FC<AuthProps> = ({ onLogin, initialView = 'LOGIN' }) =>
     setError(null);
     try {
       await SupabaseService.updateUserPassword(password);
-      setSuccessMsg("Identity restored! Terminal password updated successfully.");
+      setSuccessMsg("Password updated successfully! Redirecting...");
       setTimeout(() => {
-        // Clear hash and notify App
         window.location.hash = '';
         onLogin();
       }, 2000);
     } catch (err: any) {
-      setError(err.message || "Unable to update password. Your recovery link might have expired.");
+      setError(parseErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -90,9 +126,8 @@ export const Auth: React.FC<AuthProps> = ({ onLogin, initialView = 'LOGIN' }) =>
     
     try {
       if (view === 'REGISTER') {
-        const role = adminCode === "ESTATEGO_ADMIN_2025" ? 'ADMIN' : 'AGENT';
-        await SupabaseService.signUp(email, password, fullName, phone, state, null, role);
-        setSuccessMsg("Terminal Identity Established! You can now sign in.");
+        await SupabaseService.signUp(email, password, fullName, phone, state, null, 'AGENT');
+        setSuccessMsg("Registration successful! You can now sign in.");
         setTimeout(() => {
           setView('LOGIN');
           setSuccessMsg(null);
@@ -102,33 +137,34 @@ export const Auth: React.FC<AuthProps> = ({ onLogin, initialView = 'LOGIN' }) =>
         onLogin();
       }
     } catch (err: any) {
-      if (err.message === "EXISTS_IN_AUTH") {
+      const msg = parseErrorMessage(err);
+      if (msg.includes("already registered") || msg === "EXISTS_IN_AUTH") {
         setError(
           <div className="flex flex-col gap-3 p-1">
             <div className="flex items-center gap-2 text-red-800 font-black uppercase text-[10px]">
-              <AlertCircle size={14} /> Identity Already Secured
+              <AlertCircle size={14} /> Email Already Registered
             </div>
-            <p className="text-[11px] text-red-700 leading-tight font-medium">This email is already registered. If you don't know your password, use the "Forgot Password" link to regain access.</p>
+            <p className="text-[11px] text-red-700 leading-tight font-medium">Use the "Forgot Password" link if you cannot remember your credentials.</p>
             <div className="flex gap-2">
               <button 
                 type="button"
                 onClick={() => { setView('LOGIN'); setError(null); }}
-                className="bg-navy-900 text-white px-4 py-2 rounded-xl font-black uppercase text-[9px] hover:bg-navy-800 transition-all flex items-center gap-2 shadow-lg"
+                className="bg-navy-900 text-white px-4 py-2 rounded-xl font-black uppercase text-[9px] hover:bg-navy-800 transition-all shadow-lg"
               >
-                <LogIn size={10} /> Sign In
+                Sign In
               </button>
               <button 
                 type="button"
                 onClick={() => { setView('RESET'); setError(null); }}
                 className="bg-white border border-red-200 text-red-600 px-4 py-2 rounded-xl font-black uppercase text-[9px] hover:bg-red-50 transition-all flex items-center gap-2"
               >
-                <KeyRound size={10} /> Reset Password
+                Reset Password
               </button>
             </div>
           </div>
         );
       } else {
-        setError(err.message || "Terminal authentication error. Please verify credentials.");
+        setError(msg);
       }
     } finally {
       setLoading(false);
@@ -140,7 +176,7 @@ export const Auth: React.FC<AuthProps> = ({ onLogin, initialView = 'LOGIN' }) =>
       <div className="sm:mx-auto sm:w-full sm:max-w-md text-center">
         <img className="mx-auto h-16 w-auto mb-6" src="https://estatego.app/asset/images/logo.png" alt="EstateGO" />
         <h2 className="text-3xl font-black text-navy-900 uppercase tracking-tighter italic">
-          {view === 'REGISTER' ? 'Terminal Onboarding' : view === 'RESET' ? 'Identity Recovery' : view === 'NEW_PASSWORD' ? 'Update Credentials' : 'GoAgent Access'}
+          {view === 'REGISTER' ? 'Join EstateGO' : view === 'RESET' ? 'Reset Password' : view === 'NEW_PASSWORD' ? 'New Password' : 'GoAgent Access'}
         </h2>
         
         {view !== 'RESET' && view !== 'NEW_PASSWORD' && (
@@ -182,13 +218,13 @@ export const Auth: React.FC<AuthProps> = ({ onLogin, initialView = 'LOGIN' }) =>
           {view === 'RESET' ? (
             <form className="space-y-5" onSubmit={handleResetPassword}>
               <div>
-                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Registered Agent Email</label>
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Email Address</label>
                 <input 
                   type="email" 
                   required 
                   value={email} 
                   onChange={e => setEmail(e.target.value)} 
-                  className="block w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 outline-none focus:bg-white focus:ring-2 focus:ring-cyan-400 transition-all font-medium text-navy-900" 
+                  className="block w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 outline-none focus:bg-white focus:ring-2 focus:ring-navy-900 transition-all font-medium text-navy-900" 
                   placeholder="agent@estatego.app" 
                 />
               </div>
@@ -197,7 +233,7 @@ export const Auth: React.FC<AuthProps> = ({ onLogin, initialView = 'LOGIN' }) =>
                 disabled={loading}
                 className="w-full flex justify-center items-center gap-2 py-4 px-4 rounded-2xl shadow-xl text-sm font-black text-navy-900 bg-cyan-400 hover:bg-cyan-300 disabled:opacity-50 transition-all uppercase tracking-widest"
               >
-                {loading ? <RefreshCw className="animate-spin" /> : <><KeyRound size={18}/> Send Recovery Link</>}
+                {loading ? <RefreshCw className="animate-spin" /> : <><KeyRound size={18}/> Send Reset Link</>}
               </button>
               <button type="button" onClick={() => setView('LOGIN')} className="w-full flex items-center justify-center gap-2 text-[10px] font-black uppercase text-gray-400 hover:text-navy-900 transition-colors pt-2">
                 <ArrowLeft size={14}/> Back to Login
@@ -205,12 +241,8 @@ export const Auth: React.FC<AuthProps> = ({ onLogin, initialView = 'LOGIN' }) =>
             </form>
           ) : view === 'NEW_PASSWORD' ? (
             <form className="space-y-5" onSubmit={handleUpdatePassword}>
-              <div className="p-4 bg-navy-50 rounded-xl border border-navy-100 mb-4 flex items-start gap-3">
-                <ShieldCheck className="text-navy-800 shrink-0" size={18} />
-                <p className="text-[10px] font-bold text-navy-800 uppercase leading-tight">Identity module authorized. Establish your new terminal password to regain access.</p>
-              </div>
               <div>
-                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">New Terminal Password</label>
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">New Password</label>
                 <input type="password" required value={password} onChange={e => setPassword(e.target.value)} className="block w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 outline-none focus:bg-white focus:ring-2 focus:ring-cyan-400 transition-all font-medium text-navy-900" placeholder="Min. 6 characters" />
               </div>
               <div>
@@ -222,7 +254,7 @@ export const Auth: React.FC<AuthProps> = ({ onLogin, initialView = 'LOGIN' }) =>
                 disabled={loading}
                 className="w-full flex justify-center items-center gap-2 py-4 px-4 rounded-2xl shadow-xl text-sm font-black text-navy-900 bg-cyan-400 hover:bg-cyan-300 disabled:opacity-50 transition-all uppercase tracking-widest"
               >
-                {loading ? <RefreshCw className="animate-spin" /> : <><Lock size={18}/> Restore Identity</>}
+                {loading ? <RefreshCw className="animate-spin" /> : <><Lock size={18}/> Update Password</>}
               </button>
             </form>
           ) : (
@@ -230,12 +262,12 @@ export const Auth: React.FC<AuthProps> = ({ onLogin, initialView = 'LOGIN' }) =>
               {view === 'REGISTER' && (
                 <>
                   <div>
-                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Full Identity</label>
-                    <input type="text" required value={fullName} onChange={e => setFullName(e.target.value)} className="block w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 outline-none focus:bg-white focus:ring-2 focus:ring-cyan-400 transition-all font-medium text-navy-900" placeholder="John Doe" />
+                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Full Name</label>
+                    <input type="text" required value={fullName} onChange={e => setFullName(e.target.value)} className="block w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 outline-none focus:bg-white focus:ring-2 focus:ring-navy-900 transition-all font-medium text-navy-900" placeholder="John Doe" />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Ops Base (State)</label>
-                    <select required value={state} onChange={e => setState(e.target.value)} className="block w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 outline-none focus:bg-white focus:ring-2 focus:ring-cyan-400 transition-all font-medium text-navy-900">
+                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">State</label>
+                    <select required value={state} onChange={e => setState(e.target.value)} className="block w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 outline-none focus:bg-white focus:ring-2 focus:ring-navy-900 transition-all font-medium text-navy-900">
                       <option value="">Select State</option>
                       {NIGERIAN_STATES.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
@@ -244,30 +276,24 @@ export const Auth: React.FC<AuthProps> = ({ onLogin, initialView = 'LOGIN' }) =>
               )}
 
               <div>
-                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Agent Email</label>
-                <input type="email" required value={email} onChange={e => setEmail(e.target.value)} className="block w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 outline-none focus:bg-white focus:ring-2 focus:ring-cyan-400 transition-all font-medium text-navy-900" placeholder="agent@estatego.app" />
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Email Address</label>
+                <input type="email" required value={email} onChange={e => setEmail(e.target.value)} className="block w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 outline-none focus:bg-white focus:ring-2 focus:ring-navy-900 transition-all font-medium text-navy-900" placeholder="agent@estatego.app" />
               </div>
 
               <div>
                 <div className="flex justify-between items-center mb-1">
-                   <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest">Terminal Password</label>
+                   <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest">Password</label>
                    {view === 'LOGIN' && (
-                     <button type="button" onClick={() => setView('RESET')} className="text-[10px] font-black text-cyan-600 hover:text-cyan-500 uppercase tracking-widest italic"> Forgot Password</button>
+                     <button type="button" onClick={() => setView('RESET')} className="text-[10px] font-black text-cyan-600 hover:text-cyan-500 uppercase tracking-widest italic"> Forgot Password?</button>
                    )}
                 </div>
-                <input type="password" required value={password} onChange={e => setPassword(e.target.value)} className="block w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 outline-none focus:bg-white focus:ring-2 focus:ring-cyan-400 transition-all font-medium text-navy-900" placeholder="••••••••" />
+                <input type="password" required value={password} onChange={e => setPassword(e.target.value)} className="block w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 outline-none focus:bg-white focus:ring-2 focus:ring-navy-900 transition-all font-medium text-navy-900" placeholder="••••••••" />
               </div>
 
               {view === 'REGISTER' && (
-                <div className="space-y-5">
-                  <div>
-                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Contact Phone</label>
-                    <input type="tel" required value={phone} onChange={e => setPhone(e.target.value)} className="block w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 outline-none focus:bg-white focus:ring-2 focus:ring-cyan-400 transition-all font-medium text-navy-900" placeholder="080..." />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Ops Code</label>
-                    <input type="password" value={adminCode} onChange={e => setAdminCode(e.target.value)} className="block w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 outline-none focus:bg-white focus:ring-2 focus:ring-navy-900 transition-all font-medium text-navy-900" placeholder="Admin Override Only" />
-                  </div>
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Phone Number</label>
+                  <input type="tel" required value={phone} onChange={e => setPhone(e.target.value)} className="block w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 outline-none focus:bg-white focus:ring-2 focus:ring-navy-900 transition-all font-medium text-navy-900" placeholder="080..." />
                 </div>
               )}
 
@@ -276,7 +302,7 @@ export const Auth: React.FC<AuthProps> = ({ onLogin, initialView = 'LOGIN' }) =>
                 disabled={loading}
                 className="w-full flex justify-center items-center gap-2 py-4 px-4 rounded-2xl shadow-xl text-sm font-black text-navy-900 bg-cyan-400 hover:bg-cyan-300 disabled:opacity-50 transition-all uppercase tracking-widest"
               >
-                {loading ? <RefreshCw className="animate-spin" /> : (view === 'REGISTER' ? <><UserPlus size={18}/> Initiate Setup</> : <><LogIn size={18}/> Access Terminal</>)}
+                {loading ? <RefreshCw className="animate-spin" /> : (view === 'REGISTER' ? <><UserPlus size={18}/> Create Account</> : <><LogIn size={18}/> Sign In</>)}
               </button>
             </form>
           )}
@@ -286,67 +312,51 @@ export const Auth: React.FC<AuthProps> = ({ onLogin, initialView = 'LOGIN' }) =>
   );
 };
 
-export const AgreementWall: React.FC<{ onSign: () => void }> = ({ onSign }) => {
+export const AgreementWall: React.FC<{ onSign: () => Promise<void> }> = ({ onSign }) => {
   const [loading, setLoading] = useState(false);
-
+  
   const handleSign = async () => {
     setLoading(true);
-    await onSign();
-    setLoading(false);
+    try {
+      await onSign();
+    } catch (e: any) {
+      alert(parseErrorMessage(e));
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <div className="min-h-screen bg-navy-900 flex items-center justify-center p-6">
-      <div className="max-w-2xl w-full bg-white rounded-3xl shadow-2xl overflow-hidden flex flex-col">
-        <div className="p-8 md:p-12 border-b border-gray-100 bg-gray-50">
-          <div className="flex items-center gap-3 mb-6">
-            <ShieldCheck size={32} className="text-cyan-500" />
-            <h2 className="text-2xl font-black text-navy-900 uppercase italic tracking-tighter">Service Agreement // v2025.2</h2>
-          </div>
-          <div className="prose prose-sm max-h-80 overflow-y-auto pr-4 text-gray-600 font-medium leading-relaxed custom-scrollbar">
-            <p className="mb-6">This GoAgent Field Operations Agreement ("Agreement") is entered into by and between EstateGO ("Company") and the undersigned Agent.</p>
-            
-            <div className="space-y-6">
-              <section>
-                <h4 className="text-navy-900 font-black uppercase text-[10px] tracking-widest mb-2">1. SCOPE OF ENGAGEMENT</h4>
-                <p>The Agent is engaged to identify and report high-occupancy residential and commercial property leads within the assigned territory. Reports must include accurate GPS data and visual evidence of site visitation via the GoAgent terminal.</p>
-              </section>
-
-              <section>
-                <h4 className="text-navy-900 font-black uppercase text-[10px] tracking-widest mb-2">2. PAYOUT STRUCTURE</h4>
-                <p>Commissions are calculated at ₦450 per verified residential unit. Payments are disbursed via the payout subsystem upon successful verification by the Admin Portal and confirmation of data authenticity.</p>
-              </section>
-
-              <section>
-                <h4 className="text-navy-900 font-black uppercase text-[10px] tracking-widest mb-2">3. ETHICAL CONDUCT</h4>
-                <p>Agents must conduct themselves professionally. Fabrication of site visits or manual data entry of fictitious properties will result in immediate terminal deactivation and forfeiture of all pending commissions.</p>
-              </section>
-
-              <section>
-                <h4 className="text-navy-900 font-black uppercase text-[10px] tracking-widest mb-2">4. PAYMENT CYCLE</h4>
-                <p>Commissions are disbursed on the 7th of every month following successful client payment reconciliation. Payouts are made directly to the bank details registered in the Agent Identity Module.</p>
-              </section>
-
-              <section>
-                <h4 className="text-navy-900 font-black uppercase text-[10px] tracking-widest mb-2">5. DIGITAL SIGNATURE</h4>
-                <p>Acceptance of these terms is logged with your unique Agent ID, high-precision Timestamp, and Network IP Address as a legally binding digital contract of service.</p>
-              </section>
-            </div>
-          </div>
+    <div className="min-h-screen bg-navy-900 flex items-center justify-center p-4">
+      <div className="max-w-xl w-full bg-white rounded-3xl p-8 md:p-12 shadow-2xl text-center">
+        <div className="w-20 h-20 bg-cyan-100 text-cyan-600 rounded-full flex items-center justify-center mx-auto mb-8">
+          <ShieldCheck size={40} />
         </div>
-        <div className="p-8 md:p-12 bg-white flex flex-col md:flex-row items-center justify-between gap-6">
-          <div className="text-center md:text-left">
-            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Digital Timestamp Execution</p>
-            <p className="text-xs font-bold text-navy-900">{new Date().toLocaleDateString()} // SECURE_NODE_102</p>
-          </div>
-          <button 
-            onClick={handleSign} 
-            disabled={loading}
-            className="w-full md:w-auto px-10 py-4 bg-navy-900 text-white rounded-2xl font-black uppercase tracking-widest shadow-xl hover:bg-navy-800 transition-all flex items-center justify-center gap-2"
-          >
-            {loading ? <RefreshCw className="animate-spin" size={18} /> : <>Accept & Establish Identity</>}
-          </button>
+        <h2 className="text-3xl font-black text-navy-900 uppercase italic tracking-tighter mb-4">Service Agreement</h2>
+        <p className="text-gray-500 text-sm leading-relaxed mb-8">
+          By accessing the GoAgent Field Operations Terminal, you agree to provide accurate property data and maintain the confidentiality of all field intelligence gathered. Leads must be verified through on-site presence.
+        </p>
+        <div className="bg-gray-50 p-6 rounded-2xl mb-8 text-left border border-gray-100">
+          <ul className="space-y-3">
+            {[
+              "GPS verification is required for all leads.",
+              "False reporting will result in immediate suspension.",
+              "Commission payouts are subject to AI verification."
+            ].map((rule, i) => (
+              <li key={i} className="flex items-start gap-3 text-[11px] font-bold text-navy-800 uppercase tracking-tight">
+                <CheckCircle2 size={14} className="text-emerald-500 shrink-0" />
+                {rule}
+              </li>
+            ))}
+          </ul>
         </div>
+        <button 
+          onClick={handleSign}
+          disabled={loading}
+          className="w-full py-4 bg-navy-900 text-white rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-navy-800 shadow-xl transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+        >
+          {loading ? <RefreshCw className="animate-spin" size={18} /> : 'I Accept and Sign Agreement'}
+        </button>
       </div>
     </div>
   );

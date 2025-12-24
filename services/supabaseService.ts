@@ -17,6 +17,39 @@ const supabaseAnonKey = getEnv('SUPABASE_ANON_KEY') || 'eyJhbGciOiJIUzI1NiIsInR5
 export const isConfigured = Boolean(supabaseUrl && supabaseAnonKey && supabaseUrl.startsWith('https://'));
 export const supabase: SupabaseClient | null = isConfigured ? createClient(supabaseUrl, supabaseAnonKey) : null;
 
+/**
+ * Helper to map DB snake_case submission to camelCase
+ * Uses created_at as fallback for submissionDate to fix chart 0 values
+ */
+const mapSubmission = (s: any): DriveSubmission => ({
+  id: s.id,
+  agentId: s.agent_id,
+  agentName: s.agent_name,
+  submissionDate: s.submission_date || s.created_at,
+  status: s.status,
+  agentStatus: s.agent_status,
+  propertyName: s.property_name,
+  propertyAddress: s.property_address,
+  stateLocation: s.state_location,
+  coordinates: s.coordinates,
+  propertyPhoto: s.property_photo,
+  propertyCategory: s.property_category,
+  propertyType: s.property_type,
+  noOfUnits: s.no_of_units,
+  occupancyRate: s.occupancy_rate,
+  meteringType: s.metering_type,
+  landlordName: s.landlord_name,
+  managementType: s.management_type,
+  contactPhone: s.contact_phone,
+  interestLevel: s.interest_level,
+  featuresInterested: s.features_interested || [],
+  subscriptionType: s.subscription_type,
+  marketingChannels: s.marketing_channels || [],
+  feedback: s.feedback,
+  estimatedCommission: s.estimated_commission,
+  verification: s.verification
+});
+
 export const SupabaseService = {
   signUp: async (email: string, password: string, fullName: string, phone: string, state: string, bankDetails: any, role: UserRole) => {
     if (!supabase) throw new Error("Database not connected");
@@ -42,11 +75,13 @@ export const SupabaseService = {
     }
 
     if (authData.user) {
+      // Mirror state to profiles table
       const { error: profileError } = await supabase.from('profiles').upsert({
         id: authData.user.id,
         full_name: fullName,
         email: email,
         phone: phone,
+        state: state, // Store state in DB
         bank_details: bankDetails || null,
         role: role,
         agreement_signed: false
@@ -65,7 +100,6 @@ export const SupabaseService = {
 
   resetPassword: async (email: string) => {
     if (!supabase) throw new Error("Database not connected");
-    // Ensure the redirect URL is exactly the current base origin
     const redirectUrl = window.location.origin;
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: redirectUrl,
@@ -88,13 +122,10 @@ export const SupabaseService = {
     if (updates.fullName !== undefined) dbUpdates.full_name = updates.fullName;
     if (updates.phone !== undefined) dbUpdates.phone = updates.phone;
     if (updates.bankDetails !== undefined) dbUpdates.bank_details = updates.bankDetails;
+    if (updates.state !== undefined) dbUpdates.state = updates.state;
 
     const { error: dbError } = await supabase.from('profiles').update(dbUpdates).eq('id', userId);
-    
-    if (dbError) {
-      console.error("Supabase Profile Update Error:", JSON.stringify(dbError, null, 2));
-      throw dbError;
-    }
+    if (dbError) throw dbError;
 
     try {
       await supabase.auth.updateUser({
@@ -121,12 +152,14 @@ export const SupabaseService = {
       if (user) {
         const fullName = user.user_metadata?.full_name || 'Agent Identity Pending';
         const role = user.user_metadata?.role || 'AGENT';
+        const state = user.user_metadata?.state || 'N/A';
         
         const { data: repaired, error: repairErr } = await supabase.from('profiles').upsert({
           id: userId,
           full_name: fullName,
           email: user.email,
           phone: user.user_metadata?.phone || '',
+          state: state,
           role: role,
           agreement_signed: false
         }).select().single();
@@ -134,10 +167,10 @@ export const SupabaseService = {
         if (!repairErr && repaired) {
           return {
             id: repaired.id,
-            fullName: repaired.full_name,
-            email: repaired.email,
-            phone: repaired.phone,
-            state: user.user_metadata?.state || 'N/A',
+            fullName: String(repaired.full_name || ''),
+            email: String(repaired.email || ''),
+            phone: String(repaired.phone || ''),
+            state: String(repaired.state || state || 'N/A'),
             role: repaired.role,
             bankDetails: repaired.bank_details,
             agreementSigned: repaired.agreement_signed,
@@ -152,10 +185,10 @@ export const SupabaseService = {
 
     return {
       id: profile.id,
-      fullName: profile.full_name,
-      email: profile.email,
-      phone: profile.phone,
-      state: user?.user_metadata?.state || 'N/A',
+      fullName: String(profile.full_name || ''),
+      email: String(profile.email || ''),
+      phone: String(profile.phone || ''),
+      state: String(profile.state || user?.user_metadata?.state || 'N/A'),
       role: profile.role,
       bankDetails: profile.bank_details,
       agreementSigned: profile.agreement_signed,
@@ -169,12 +202,13 @@ export const SupabaseService = {
     if (!supabase) throw new Error("Database not connected");
     const { data, error } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
     if (error) throw error;
+    
     return (data || []).map(d => ({
       id: d.id,
-      fullName: d.full_name,
-      email: d.email,
-      phone: d.phone,
-      state: 'N/A', 
+      fullName: String(d.full_name || ''),
+      email: String(d.email || ''),
+      phone: String(d.phone || ''),
+      state: String(d.state || 'N/A'), 
       role: d.role,
       bankDetails: d.bank_details,
       agreementSigned: d.agreement_signed,
@@ -197,29 +231,10 @@ export const SupabaseService = {
     let query = supabase.from('submissions').select('*').order('submission_date', { ascending: false });
     if (role === 'AGENT') query = query.eq('agent_id', userId);
     
-    const { data, error } = await query;
-    if (error) throw error;
+    const { data: results, error: queryError } = await query;
+    if (queryError) throw queryError;
 
-    return (data || []).map(s => ({ 
-      ...s, 
-      agentId: s.agent_id, 
-      agentName: s.agent_name, 
-      propertyName: s.property_name, 
-      propertyAddress: s.property_address, 
-      stateLocation: s.state_location, 
-      noOfUnits: s.no_of_units, 
-      occupancyRate: s.occupancy_rate, 
-      meteringType: s.metering_type, 
-      landlordName: s.landlord_name, 
-      managementType: s.management_type, 
-      contactPhone: s.contact_phone, 
-      interestLevel: s.interest_level, 
-      featuresInterested: s.features_interested || [], 
-      subscriptionType: s.subscription_type, 
-      marketingChannels: s.marketing_channels || [], 
-      estimatedCommission: s.estimated_commission, 
-      submissionDate: s.submission_date 
-    }));
+    return (results || []).map(mapSubmission);
   },
 
   createSubmission: async (submission: Partial<DriveSubmission>) => {
@@ -249,7 +264,7 @@ export const SupabaseService = {
       status: 'PENDING'
     }).select().single();
     if (error) throw error;
-    return data;
+    return mapSubmission(data);
   },
 
   updateSubmission: async (id: string, status: SubmissionStatus, verification?: VerificationResult) => {

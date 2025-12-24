@@ -16,6 +16,17 @@ interface ProfileViewProps {
   onUpdate: (updates: Partial<User>) => Promise<void>;
 }
 
+const parseErrorMessage = (err: any): string => {
+  if (typeof err === 'string') return err;
+  if (err?.message && typeof err.message === 'string') return err.message;
+  if (err?.error_description && typeof err.error_description === 'string') return err.error_description;
+  try {
+    return JSON.stringify(err);
+  } catch {
+    return "Identity update synchronization failed.";
+  }
+};
+
 export const ProfileView: React.FC<ProfileViewProps> = ({ user, onUpdate }) => {
   const [loading, setLoading] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -49,16 +60,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ user, onUpdate }) => {
       setTimeout(() => setSaved(false), 3000);
     } catch (err: any) {
       console.error("Profile Update Error Detailed:", err);
-      // More robust error stringification to prevent [object Object]
-      let message = "Unknown error occurred.";
-      if (typeof err === 'string') {
-        message = err;
-      } else if (err && typeof err === 'object') {
-        if (err.message) message = err.message;
-        else if (err.error_description) message = err.error_description;
-        else message = JSON.stringify(err);
-      }
-      setError(message);
+      setError(parseErrorMessage(err));
     } finally {
       setLoading(false);
     }
