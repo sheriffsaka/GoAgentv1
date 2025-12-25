@@ -19,34 +19,34 @@ export const supabase: SupabaseClient | null = isConfigured ? createClient(supab
 
 /**
  * Helper to map DB snake_case submission to camelCase
+ * Includes fallback for state_location to prevent null crashes
  */
 const mapSubmission = (s: any): DriveSubmission => ({
   id: s.id,
   agentId: s.agent_id,
-  agentName: s.agent_name,
+  agentName: s.agent_name || 'Unknown Agent',
   submissionDate: s.submission_date || s.created_at,
   status: s.status,
-  agentStatus: s.agent_status,
-  propertyName: s.property_name,
-  propertyAddress: s.property_address,
-  stateLocation: s.state_location,
+  agentStatus: s.agent_status || 'Freelance',
+  propertyName: s.property_name || 'Unnamed Property',
+  propertyAddress: s.property_address || 'No Address',
+  stateLocation: s.state_location || 'Lagos', // Default fallback
   coordinates: s.coordinates,
   propertyPhoto: s.property_photo,
-  propertyCategory: s.property_category,
-  propertyType: s.property_type,
-  noOfUnits: s.no_of_units,
-  // Fixed: Map snake_case database field to camelCase TypeScript property
-  occupancyRate: s.occupancy_rate,
-  meteringType: s.metering_type,
-  landlordName: s.landlord_name,
-  managementType: s.management_type,
-  contactPhone: s.contact_phone,
-  interestLevel: s.interest_level,
+  propertyCategory: s.property_category || 'Residential',
+  propertyType: s.property_type || 'Other',
+  noOfUnits: s.no_of_units || 0,
+  occupancyRate: s.occupancy_rate || 0,
+  meteringType: s.metering_type || 'Standard',
+  landlordName: s.landlord_name || 'N/A',
+  managementType: s.management_type || 'Individual',
+  contactPhone: s.contact_phone || 'N/A',
+  interestLevel: s.interest_level || 'Low',
   featuresInterested: s.features_interested || [],
-  subscriptionType: s.subscription_type,
+  subscriptionType: s.subscription_type || 'Standard',
   marketingChannels: s.marketing_channels || [],
-  feedback: s.feedback,
-  estimatedCommission: s.estimated_commission,
+  feedback: s.feedback || '',
+  estimatedCommission: s.estimated_commission || 0,
   verification: s.verification
 });
 
@@ -74,9 +74,7 @@ export const SupabaseService = {
       throw authError;
     }
 
-    // Try creating profile immediately if session is returned (auto-login enabled)
-    // If not returned (confirmation required), profile will be created on first successful login in getProfile()
-    if (authData.user && authData.session) {
+    if (authData?.user && authData?.session) {
       try {
         await supabase.from('profiles').upsert({
           id: authData.user.id,
@@ -89,7 +87,7 @@ export const SupabaseService = {
           agreement_signed: false
         });
       } catch (e) {
-        console.warn("Deferred profile creation - RLS or Confirmation pending.");
+        console.warn("Deferred profile creation - record will be repaired on sync.");
       }
     }
     return authData.user;
@@ -129,7 +127,13 @@ export const SupabaseService = {
     if (updates.state !== undefined) dbUpdates.state = updates.state;
 
     const { error: dbError } = await supabase.from('profiles').update(dbUpdates).eq('id', userId);
-    if (dbError) throw dbError;
+    if (dbError) {
+      // If error is specifically about missing column, throw a readable message
+      if (dbError.message.includes("column \"state\" does not exist")) {
+        throw new Error("The 'state' field is missing in your database. Please run the provided SQL script in the Supabase Editor.");
+      }
+      throw dbError;
+    }
 
     try {
       await supabase.auth.updateUser({
@@ -147,29 +151,27 @@ export const SupabaseService = {
   getProfile: async (userId: string): Promise<User> => {
     if (!supabase) throw new Error("Database not connected");
     
-    // Attempt to fetch profile
-    const { data: profile, error } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
-    if (error) throw error;
+    // Explicitly select columns to check if they exist
+    const { data: profile, error: profileErr } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    
+    if (authError) throw authError;
+    const user = authData?.user;
 
-    // Get current auth state for metadata fallback
-    const { data: { user } } = await supabase.auth.getUser();
-
-    // Lazy Repair/Creation: If profile record is missing but user is authenticated
+    // If profile record is missing from table, repair it
     if (!profile) {
       if (user) {
-        const fullName = user.user_metadata?.full_name || 'Agent Identity Pending';
-        const role = user.user_metadata?.role || 'AGENT';
-        const state = user.user_metadata?.state || 'N/A';
-        
-        const { data: repaired, error: repairErr } = await supabase.from('profiles').upsert({
+        const repairData = {
           id: userId,
-          full_name: fullName,
+          full_name: user.user_metadata?.full_name || 'Agent Identity Pending',
           email: user.email,
           phone: user.user_metadata?.phone || '',
-          state: state,
-          role: role,
+          state: user.user_metadata?.state || 'Lagos',
+          role: user.user_metadata?.role || 'AGENT',
           agreement_signed: false
-        }).select().single();
+        };
+
+        const { data: repaired, error: repairErr } = await supabase.from('profiles').upsert(repairData).select().single();
 
         if (!repairErr && repaired) {
           return {
@@ -177,7 +179,7 @@ export const SupabaseService = {
             fullName: String(repaired.full_name || ''),
             email: String(repaired.email || ''),
             phone: String(repaired.phone || ''),
-            state: String(repaired.state || state || 'N/A'),
+            state: String(repaired.state || 'Lagos'),
             role: repaired.role,
             bankDetails: repaired.bank_details,
             agreementSigned: repaired.agreement_signed,
@@ -185,9 +187,20 @@ export const SupabaseService = {
             agreementIp: repaired.agreement_ip,
             createdAt: repaired.created_at
           };
+        } else {
+          // Fallback to Auth metadata if table write fails (schema mismatch)
+          return {
+            id: userId,
+            fullName: String(user.user_metadata?.full_name || 'Agent Identity Pending'),
+            email: String(user.email || ''),
+            phone: String(user.user_metadata?.phone || ''),
+            state: String(user.user_metadata?.state || 'Lagos'),
+            role: user.user_metadata?.role || 'AGENT',
+            agreementSigned: false
+          };
         }
       }
-      throw new Error("PROFILE_MISSING");
+      throw new Error("PROFILE_UNRECOVERABLE");
     }
 
     return {
@@ -195,7 +208,7 @@ export const SupabaseService = {
       fullName: String(profile.full_name || ''),
       email: String(profile.email || ''),
       phone: String(profile.phone || ''),
-      state: String(profile.state || user?.user_metadata?.state || 'N/A'),
+      state: String(profile.state || 'Lagos'),
       role: profile.role,
       bankDetails: profile.bank_details,
       agreementSigned: profile.agreement_signed,
@@ -215,7 +228,7 @@ export const SupabaseService = {
       fullName: String(d.full_name || ''),
       email: String(d.email || ''),
       phone: String(d.phone || ''),
-      state: String(d.state || 'N/A'), 
+      state: String(d.state || 'Lagos'), 
       role: d.role,
       bankDetails: d.bank_details,
       agreementSigned: d.agreement_signed,
@@ -224,13 +237,34 @@ export const SupabaseService = {
   },
 
   signAgreement: async (userId: string, ip: string) => {
-    if (!supabase) throw new Error("Database not connected");
-    const { error } = await supabase.from('profiles').update({ 
+    if (!supabase) throw new Error("Database connection is missing.");
+    
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    if (authError) throw new Error(authError.message);
+    
+    const user = authData?.user;
+    if (!user) throw new Error("Your authentication session has expired.");
+    
+    const profileUpsertData = { 
+      id: userId,
+      full_name: user?.user_metadata?.full_name || 'Agent',
+      email: user?.email || '',
+      phone: user?.user_metadata?.phone || '',
+      state: user?.user_metadata?.state || 'Lagos',
+      role: user?.user_metadata?.role || 'AGENT',
       agreement_signed: true, 
       agreement_timestamp: new Date().toISOString(), 
       agreement_ip: ip 
-    }).eq('id', userId);
-    if (error) throw error;
+    };
+    
+    const { error: upsertError } = await supabase.from('profiles').upsert(profileUpsertData);
+    
+    if (upsertError) {
+      if (upsertError.message.includes("column \"state\" does not exist")) {
+        throw new Error("The 'state' field is missing in your database. Use the SQL Editor to add it.");
+      }
+      throw new Error(upsertError.message || "Database signature commit failed.");
+    }
   },
 
   getSubmissions: async (role: string, userId: string): Promise<DriveSubmission[]> => {
@@ -270,7 +304,13 @@ export const SupabaseService = {
       estimated_commission: submission.estimatedCommission,
       status: 'PENDING'
     }).select().single();
-    if (error) throw error;
+
+    if (error) {
+       if (error.message.includes("column \"state_location\" does not exist")) {
+         throw new Error("The 'state_location' field is missing in your 'submissions' table.");
+       }
+       throw error;
+    }
     return mapSubmission(data);
   },
 

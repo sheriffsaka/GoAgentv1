@@ -16,7 +16,7 @@ const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'form' | 'admin' | 'profile'>('dashboard');
   const [submissions, setSubmissions] = useState<DriveSubmission[]>([]);
   const [loading, setLoading] = useState(true);
-  const [profileError, setProfileError] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
   const [recoveryFlow, setRecoveryFlow] = useState(false);
 
   useEffect(() => {
@@ -70,17 +70,16 @@ const App: React.FC = () => {
 
   const fetchUserData = async (userId: string) => {
     setLoading(true);
-    setProfileError(false);
+    setProfileError(null);
     try {
       const profile = await SupabaseService.getProfile(userId);
       setUser(profile);
       const subs = await SupabaseService.getSubmissions(profile.role, userId);
       setSubmissions(subs);
     } catch (err: any) { 
-      console.error(err);
-      if (err.message === "PROFILE_MISSING") {
-        setProfileError(true);
-      }
+      const msg = parseErrorMessage(err);
+      console.error("User Data Sync Error:", msg);
+      setProfileError(msg);
     }
     finally { setLoading(false); }
   };
@@ -117,15 +116,16 @@ const App: React.FC = () => {
         <div className="max-w-md w-full bg-white p-8 rounded-3xl shadow-2xl border-t-8 border-navy-900 text-center">
           <AlertCircle size={48} className="mx-auto text-orange-500 mb-6" />
           <h2 className="text-2xl font-black text-navy-900 uppercase tracking-tight mb-4">Profile Synchronization Issue</h2>
-          <p className="text-sm text-gray-500 mb-8 leading-relaxed">
-            We found your login account, but your agent identity profile is missing. This usually happens after a system migration.
-          </p>
+          <div className="text-sm text-gray-500 mb-8 leading-relaxed">
+            <p className="font-bold text-red-600 mb-2 uppercase text-[10px]">{profileError}</p>
+            <p>We found your account, but your agent identity profile encountered a sync error. This can usually be fixed by retrying or re-logging.</p>
+          </div>
           <div className="space-y-4">
              <button 
-               onClick={() => supabase?.auth.signOut().then(() => setProfileError(false))}
+               onClick={() => supabase?.auth.signOut().then(() => setProfileError(null))}
                className="w-full py-4 bg-navy-900 text-white rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-navy-800"
              >
-               Return to Login / Registration
+               Return to Login
              </button>
              <button 
                onClick={() => fetchUserData(session.user.id)}

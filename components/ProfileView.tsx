@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { User } from '../types';
 import { Save, UserCircle, Landmark, Loader2, CheckCircle, AlertCircle } from 'lucide-react';
+import { parseErrorMessage } from './Auth';
 
 const NIGERIAN_STATES = [
   "Abia", "Adamawa", "Akwa Ibom", "Anambra", "Bauchi", "Bayelsa", "Benue", "Borno", 
@@ -15,17 +16,6 @@ interface ProfileViewProps {
   user: User;
   onUpdate: (updates: Partial<User>) => Promise<void>;
 }
-
-const parseErrorMessage = (err: any): string => {
-  if (typeof err === 'string') return err;
-  if (err?.message && typeof err.message === 'string') return err.message;
-  if (err?.error_description && typeof err.error_description === 'string') return err.error_description;
-  try {
-    return JSON.stringify(err);
-  } catch {
-    return "Identity update synchronization failed.";
-  }
-};
 
 export const ProfileView: React.FC<ProfileViewProps> = ({ user, onUpdate }) => {
   const [loading, setLoading] = useState(false);
@@ -135,7 +125,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ user, onUpdate }) => {
             disabled={loading} 
             className={`px-10 py-4 rounded-2xl font-black uppercase tracking-widest shadow-xl flex items-center gap-2 transition-all ${saved ? 'bg-emerald-500 text-white' : 'bg-navy-900 text-white hover:bg-navy-800'} disabled:opacity-50`}
           >
-            {loading ? <Loader2 className="animate-spin" size={18} /> : (saved ? <><CheckCircle size={18}/> Updated</> : <><Save size={18}/> Commit Updates</>)}
+            {loading ? <Loader2 className="animate-spin" size={18} /> : (saved ? <><CheckCircle size={18}/> Updated</> : <><Save size={18}/> Update Profile</>)}
           </button>
         </div>
       </form>

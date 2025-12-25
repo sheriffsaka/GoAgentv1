@@ -19,58 +19,65 @@ interface AuthProps {
 }
 
 /**
- * Robustly parses any error into a displayable string.
- * Prevents [object Object] by checking types and stringifying objects.
+ * High-resilience error parser for the terminal.
+ * Aggressively extracts human-readable text and prevents generic '[object Object]' displays.
  */
 export const parseErrorMessage = (err: any): string => {
-  if (!err) return "An unknown error occurred.";
+  if (err === null || err === undefined) return "An unknown error occurred.";
   
-  // If it's already a string, ensure it's not the string representation of an object
+  const OBJECT_ERROR_MSG = "The terminal encountered an unhandled data structure. Please refresh the page.";
+
+  // Helper to check if a string is the generic object marker
+  const isGenericObjectStr = (s: string) => 
+    s.includes('[object Object]') || s === '{}' || s.includes('[object postgresterror]') || s.includes('[object PostgrestError]');
+
+  // 1. If it's already a string
   if (typeof err === 'string') {
-    return err === '[object Object]' ? "System identity mismatch. Please try again." : err;
+    return isGenericObjectStr(err) ? OBJECT_ERROR_MSG : err;
   }
 
-  // Handle standard Error objects
-  if (err instanceof Error) {
-    return err.message;
-  }
-  
-  // Handle Supabase/SDK specific error structures
-  if (err.message) {
-    return typeof err.message === 'string' ? err.message : JSON.stringify(err.message);
-  }
-  
-  if (err.error_description) {
-    return typeof err.error_description === 'string' ? err.error_description : JSON.stringify(err.error_description);
-  }
-  
-  if (err.error && typeof err.error === 'string') {
-    return err.error;
-  }
+  // 2. Handle known object structures (Standard Error, Supabase, Postgrest)
+  let extracted = "";
 
-  // Fallback to JSON stringification
+  if (err.message && typeof err.message === 'string') extracted = err.message;
+  else if (err.error_description && typeof err.error_description === 'string') extracted = err.error_description;
+  else if (err.error && typeof err.error === 'string') extracted = err.error;
+  else if (err.error && typeof err.error === 'object' && err.error.message) extracted = err.error.message;
+  else if (err.msg && typeof err.msg === 'string') extracted = err.msg;
+  else if (err.details && typeof err.details === 'string') extracted = err.details;
+  
+  // If we extracted a string, verify it's not generic
+  if (extracted && !isGenericObjectStr(extracted)) return extracted;
+
+  // 3. Fallback: JSON stringify (often better than String() for objects)
   try {
-    const stringified = JSON.stringify(err);
-    if (stringified === '{}') {
-      const str = String(err);
-      return str === '[object Object]' ? "A structured system error occurred. Access denied." : str;
+    const json = JSON.stringify(err);
+    if (json && json !== '{}' && json !== 'null') {
+      return json.length > 200 ? json.substring(0, 200) + '...' : json;
     }
-    return stringified;
-  } catch {
-    return "Critical communication error with the authentication server.";
+  } catch (e) {
+    // Stringify failed
   }
+
+  // 4. Final resort: Native string representation
+  const finalStr = String(err);
+  return isGenericObjectStr(finalStr) ? OBJECT_ERROR_MSG : finalStr;
 };
 
-// Added AgreementWall component to satisfy App.tsx import
 export const AgreementWall: React.FC<{ onSign: () => Promise<void> }> = ({ onSign }) => {
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleSign = async () => {
     setLoading(true);
+    setError(null);
     try {
       await onSign();
     } catch (err: any) {
-      alert(parseErrorMessage(err));
+      console.error("Agreement Signing Error Caught:", err);
+      // Ensure we always have a string for the error state
+      const friendlyError = parseErrorMessage(err);
+      setError(friendlyError);
     } finally {
       setLoading(false);
     }
@@ -78,7 +85,7 @@ export const AgreementWall: React.FC<{ onSign: () => Promise<void> }> = ({ onSig
 
   return (
     <div className="min-h-screen bg-navy-900 flex items-center justify-center p-4">
-      <div className="max-w-2xl w-full bg-white rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in duration-300">
+      <div className="max-w-2xl w-full bg-white rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in duration-300 border-b-[12px] border-navy-900">
         <div className="p-8 md:p-12 text-center">
           <div className="w-20 h-20 bg-cyan-100 text-navy-900 rounded-3xl flex items-center justify-center mx-auto mb-8 transform rotate-12">
             <ShieldCheck size={40} />
@@ -87,7 +94,25 @@ export const AgreementWall: React.FC<{ onSign: () => Promise<void> }> = ({ onSig
           <h2 className="text-3xl font-black text-navy-900 uppercase italic tracking-tighter mb-4">Service Agreement</h2>
           <p className="text-gray-500 font-medium mb-10 text-sm">Please review the Field Operations Agreement to activate your terminal access.</p>
 
-          <div className="text-left mb-10 p-6 bg-gray-50 rounded-2xl border border-gray-100 max-h-64 overflow-y-auto space-y-6">
+          {error && (
+            <div className="mb-6 p-4 bg-red-50 border border-red-100 text-red-700 text-xs rounded-xl flex items-start gap-3 text-left animate-in fade-in slide-in-from-top-2">
+              <AlertCircle size={18} className="shrink-0 mt-0.5" />
+              <div>
+                <p className="font-black uppercase tracking-tight mb-1">Activation Fault</p>
+                <p className="font-medium leading-relaxed">{error}</p>
+                <div className="mt-3 flex gap-4">
+                  <button onClick={() => window.location.reload()} className="text-[10px] font-black uppercase underline hover:text-red-900 flex items-center gap-1">
+                     <RefreshCw size={10} /> Restart Terminal
+                  </button>
+                  <button onClick={() => setError(null)} className="text-[10px] font-black uppercase underline hover:text-red-900">
+                     Dismiss
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="text-left mb-10 p-6 bg-gray-50 rounded-2xl border border-gray-100 max-h-64 overflow-y-auto space-y-6 custom-scrollbar">
             <div>
               <h4 className="text-[10px] font-black uppercase text-navy-900 tracking-widest mb-2">1. Operational Integrity</h4>
               <p className="text-xs text-gray-500 leading-relaxed font-medium">Agents must provide accurate data from physical field visits. Fabrication of property details or management contacts is prohibited.</p>
@@ -109,6 +134,8 @@ export const AgreementWall: React.FC<{ onSign: () => Promise<void> }> = ({ onSig
           >
             {loading ? <RefreshCw className="animate-spin" /> : <><CheckCircle2 size={18} className="text-cyan-400" /> Sign & Activate Terminal</>}
           </button>
+
+          <p className="mt-6 text-[9px] font-bold text-gray-400 uppercase tracking-widest">Digital Signature Node: {new Date().getFullYear()}/GO-AGENT-AUTH</p>
         </div>
       </div>
     </div>
@@ -192,7 +219,6 @@ export const Auth: React.FC<AuthProps> = ({ onLogin, initialView = 'LOGIN' }) =>
     } catch (err: any) {
       const msg = parseErrorMessage(err);
       
-      // Handle Email Not Confirmed specifically
       if (msg.toLowerCase().includes("email not confirmed")) {
         setError(
           <div className="flex flex-col gap-3 p-1">
