@@ -24,38 +24,95 @@ interface AuthProps {
  */
 export const parseErrorMessage = (err: any): string => {
   if (!err) return "An unknown error occurred.";
-  if (typeof err === 'string') {
-    return err === '[object Object]' ? "An unexpected structured error occurred." : err;
-  }
   
-  // Handle Supabase/Standard Error objects
-  if (err.message && typeof err.message === 'string') {
+  // If it's already a string, ensure it's not the string representation of an object
+  if (typeof err === 'string') {
+    return err === '[object Object]' ? "System identity mismatch. Please try again." : err;
+  }
+
+  // Handle standard Error objects
+  if (err instanceof Error) {
     return err.message;
   }
   
-  // Handle specific Supabase Auth error patterns
-  if (err.error_description && typeof err.error_description === 'string') {
-    return err.error_description;
+  // Handle Supabase/SDK specific error structures
+  if (err.message) {
+    return typeof err.message === 'string' ? err.message : JSON.stringify(err.message);
+  }
+  
+  if (err.error_description) {
+    return typeof err.error_description === 'string' ? err.error_description : JSON.stringify(err.error_description);
   }
   
   if (err.error && typeof err.error === 'string') {
     return err.error;
   }
 
-  // Fallback to JSON stringification if it's an object
+  // Fallback to JSON stringification
   try {
     const stringified = JSON.stringify(err);
     if (stringified === '{}') {
-      // If it's a native Error object, String() will give 'Error: message'
-      // If it's a plain object {}, String() will give '[object Object]'
       const str = String(err);
-      return str === '[object Object]' ? "System error: Profile or data mismatch detected." : str;
+      return str === '[object Object]' ? "A structured system error occurred. Access denied." : str;
     }
     return stringified;
   } catch {
-    const finalFallback = String(err);
-    return finalFallback === '[object Object]' ? "Critical system error occurred." : finalFallback;
+    return "Critical communication error with the authentication server.";
   }
+};
+
+// Added AgreementWall component to satisfy App.tsx import
+export const AgreementWall: React.FC<{ onSign: () => Promise<void> }> = ({ onSign }) => {
+  const [loading, setLoading] = useState(false);
+
+  const handleSign = async () => {
+    setLoading(true);
+    try {
+      await onSign();
+    } catch (err: any) {
+      alert(parseErrorMessage(err));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-navy-900 flex items-center justify-center p-4">
+      <div className="max-w-2xl w-full bg-white rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in duration-300">
+        <div className="p-8 md:p-12 text-center">
+          <div className="w-20 h-20 bg-cyan-100 text-navy-900 rounded-3xl flex items-center justify-center mx-auto mb-8 transform rotate-12">
+            <ShieldCheck size={40} />
+          </div>
+          
+          <h2 className="text-3xl font-black text-navy-900 uppercase italic tracking-tighter mb-4">Service Agreement</h2>
+          <p className="text-gray-500 font-medium mb-10 text-sm">Please review the Field Operations Agreement to activate your terminal access.</p>
+
+          <div className="text-left mb-10 p-6 bg-gray-50 rounded-2xl border border-gray-100 max-h-64 overflow-y-auto space-y-6">
+            <div>
+              <h4 className="text-[10px] font-black uppercase text-navy-900 tracking-widest mb-2">1. Operational Integrity</h4>
+              <p className="text-xs text-gray-500 leading-relaxed font-medium">Agents must provide accurate data from physical field visits. Fabrication of property details or management contacts is prohibited.</p>
+            </div>
+            <div>
+              <h4 className="text-[10px] font-black uppercase text-navy-900 tracking-widest mb-2">2. Payout Protocol</h4>
+              <p className="text-xs text-gray-500 leading-relaxed font-medium">Commissions are calculated based on verified units. Estates with suspicious data will undergo manual audit before approval.</p>
+            </div>
+            <div>
+              <h4 className="text-[10px] font-black uppercase text-navy-900 tracking-widest mb-2">3. Termination</h4>
+              <p className="text-xs text-gray-500 leading-relaxed font-medium">EstateGO reserves the right to deactivate any terminal found to be engaging in fraudulent reporting or brand misrepresentation.</p>
+            </div>
+          </div>
+
+          <button 
+            onClick={handleSign}
+            disabled={loading}
+            className="w-full py-5 bg-navy-900 text-white rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-navy-800 transition-all shadow-xl flex items-center justify-center gap-3 disabled:opacity-50"
+          >
+            {loading ? <RefreshCw className="animate-spin" /> : <><CheckCircle2 size={18} className="text-cyan-400" /> Sign & Activate Terminal</>}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 };
 
 export const Auth: React.FC<AuthProps> = ({ onLogin, initialView = 'LOGIN' }) => {
@@ -127,18 +184,27 @@ export const Auth: React.FC<AuthProps> = ({ onLogin, initialView = 'LOGIN' }) =>
     try {
       if (view === 'REGISTER') {
         await SupabaseService.signUp(email, password, fullName, phone, state, null, 'AGENT');
-        setSuccessMsg("Registration successful! You can now sign in.");
-        setTimeout(() => {
-          setView('LOGIN');
-          setSuccessMsg(null);
-        }, 3000);
+        setSuccessMsg("Registration initiated! Please check your email for a confirmation link to activate your account.");
       } else {
         await SupabaseService.signIn(email, password);
         onLogin();
       }
     } catch (err: any) {
       const msg = parseErrorMessage(err);
-      if (msg.includes("already registered") || msg === "EXISTS_IN_AUTH") {
+      
+      // Handle Email Not Confirmed specifically
+      if (msg.toLowerCase().includes("email not confirmed")) {
+        setError(
+          <div className="flex flex-col gap-3 p-1">
+            <div className="flex items-center gap-2 text-orange-800 font-black uppercase text-[10px]">
+              <AlertCircle size={14} /> Account Not Activated
+            </div>
+            <p className="text-[11px] text-orange-700 leading-tight font-medium">
+              Your email hasn't been verified yet. Please click the link sent to <strong>{email}</strong> to activate your terminal.
+            </p>
+          </div>
+        );
+      } else if (msg.includes("already registered") || msg === "EXISTS_IN_AUTH") {
         setError(
           <div className="flex flex-col gap-3 p-1">
             <div className="flex items-center gap-2 text-red-800 font-black uppercase text-[10px]">
@@ -307,56 +373,6 @@ export const Auth: React.FC<AuthProps> = ({ onLogin, initialView = 'LOGIN' }) =>
             </form>
           )}
         </div>
-      </div>
-    </div>
-  );
-};
-
-export const AgreementWall: React.FC<{ onSign: () => Promise<void> }> = ({ onSign }) => {
-  const [loading, setLoading] = useState(false);
-  
-  const handleSign = async () => {
-    setLoading(true);
-    try {
-      await onSign();
-    } catch (e: any) {
-      alert(parseErrorMessage(e));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div className="min-h-screen bg-navy-900 flex items-center justify-center p-4">
-      <div className="max-w-xl w-full bg-white rounded-3xl p-8 md:p-12 shadow-2xl text-center">
-        <div className="w-20 h-20 bg-cyan-100 text-cyan-600 rounded-full flex items-center justify-center mx-auto mb-8">
-          <ShieldCheck size={40} />
-        </div>
-        <h2 className="text-3xl font-black text-navy-900 uppercase italic tracking-tighter mb-4">Service Agreement</h2>
-        <p className="text-gray-500 text-sm leading-relaxed mb-8">
-          By accessing the GoAgent Field Operations Terminal, you agree to provide accurate property data and maintain the confidentiality of all field intelligence gathered. Leads must be verified through on-site presence.
-        </p>
-        <div className="bg-gray-50 p-6 rounded-2xl mb-8 text-left border border-gray-100">
-          <ul className="space-y-3">
-            {[
-              "GPS verification is required for all leads.",
-              "False reporting will result in immediate suspension.",
-              "Commission payouts are subject to AI verification."
-            ].map((rule, i) => (
-              <li key={i} className="flex items-start gap-3 text-[11px] font-bold text-navy-800 uppercase tracking-tight">
-                <CheckCircle2 size={14} className="text-emerald-500 shrink-0" />
-                {rule}
-              </li>
-            ))}
-          </ul>
-        </div>
-        <button 
-          onClick={handleSign}
-          disabled={loading}
-          className="w-full py-4 bg-navy-900 text-white rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-navy-800 shadow-xl transition-all disabled:opacity-50 flex items-center justify-center gap-2"
-        >
-          {loading ? <RefreshCw className="animate-spin" size={18} /> : 'I Accept and Sign Agreement'}
-        </button>
       </div>
     </div>
   );

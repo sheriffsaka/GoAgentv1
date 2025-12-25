@@ -19,7 +19,6 @@ export const supabase: SupabaseClient | null = isConfigured ? createClient(supab
 
 /**
  * Helper to map DB snake_case submission to camelCase
- * Uses created_at as fallback for submissionDate to fix chart 0 values
  */
 const mapSubmission = (s: any): DriveSubmission => ({
   id: s.id,
@@ -36,6 +35,7 @@ const mapSubmission = (s: any): DriveSubmission => ({
   propertyCategory: s.property_category,
   propertyType: s.property_type,
   noOfUnits: s.no_of_units,
+  // Fixed: Map snake_case database field to camelCase TypeScript property
   occupancyRate: s.occupancy_rate,
   meteringType: s.metering_type,
   landlordName: s.landlord_name,
@@ -74,19 +74,23 @@ export const SupabaseService = {
       throw authError;
     }
 
-    if (authData.user) {
-      // Mirror state to profiles table
-      const { error: profileError } = await supabase.from('profiles').upsert({
-        id: authData.user.id,
-        full_name: fullName,
-        email: email,
-        phone: phone,
-        state: state, // Store state in DB
-        bank_details: bankDetails || null,
-        role: role,
-        agreement_signed: false
-      });
-      if (profileError) console.warn("Deferred profile creation warning:", profileError.message);
+    // Try creating profile immediately if session is returned (auto-login enabled)
+    // If not returned (confirmation required), profile will be created on first successful login in getProfile()
+    if (authData.user && authData.session) {
+      try {
+        await supabase.from('profiles').upsert({
+          id: authData.user.id,
+          full_name: fullName,
+          email: email,
+          phone: phone,
+          state: state,
+          bank_details: bankDetails || null,
+          role: role,
+          agreement_signed: false
+        });
+      } catch (e) {
+        console.warn("Deferred profile creation - RLS or Confirmation pending.");
+      }
     }
     return authData.user;
   },
@@ -143,11 +147,14 @@ export const SupabaseService = {
   getProfile: async (userId: string): Promise<User> => {
     if (!supabase) throw new Error("Database not connected");
     
+    // Attempt to fetch profile
     const { data: profile, error } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
     if (error) throw error;
 
+    // Get current auth state for metadata fallback
     const { data: { user } } = await supabase.auth.getUser();
 
+    // Lazy Repair/Creation: If profile record is missing but user is authenticated
     if (!profile) {
       if (user) {
         const fullName = user.user_metadata?.full_name || 'Agent Identity Pending';
